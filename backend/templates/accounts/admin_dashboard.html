@@ -1,140 +1,268 @@
 {% extends "base.html" %}
 
-{% block title %}Admin Dashboard{% endblock %}
+{% block title %}Admin Dashboard | FreshHaul{% endblock %}
 {% block page_class %}wide{% endblock %}
-{% block card_class %}dashboard{% endblock %}
+
+{% block extra_head %}
+<style>
+    .metric-card {
+        background: rgba(255,255,255,0.8);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .metric-card:hover {
+        transform: translateY(-2px);
+        box-shadow: var(--shadow-sm);
+        border-color: var(--accent);
+    }
+
+    .metric-card h3 {
+        margin: 0 0 0.5rem 0;
+        color: var(--muted);
+        font-size: 0.95rem;
+        font-weight: 500;
+    }
+
+    .metric-card p {
+        margin: 0;
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: var(--text);
+    }
+
+    .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 1rem;
+        background: #fff;
+        border-radius: var(--radius-md);
+        overflow: hidden;
+        border: 1px solid var(--border);
+    }
+
+    th, td {
+        padding: 1rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+    }
+
+    th {
+        background: #f8fafc;
+        font-weight: 600;
+        color: var(--muted);
+        text-transform: uppercase;
+        font-size: 0.8rem;
+        letter-spacing: 0.05em;
+    }
+
+    tr:last-child td { border-bottom: none; }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="hero">
-    <h1>System admin dashboard</h1>
-    <p>Review the active transport rates and the booking revenue picture without leaving the main application.</p>
+<div class="panel" style="background: linear-gradient(135deg, rgba(239, 68, 68, 0.1), transparent); border-color: rgba(239, 68, 68, 0.2); margin-bottom: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <h1>System Administration</h1>
+            <p style="margin: 0;">Manage transport rates, review booking metrics, and monitor platform revenue.</p>
+        </div>
+        <div style="text-align: right;">
+            <p style="margin: 0; font-weight: 600;">{{ user.first_name }} {{ user.last_name }}</p>
+            <span class="status-badge" style="background: var(--text); color: white;">Admin</span>
+        </div>
+    </div>
 </div>
 
 {% if messages %}
-<div class="stack" style="margin-bottom: 1rem;">
+<div class="stack" style="margin-bottom: 2rem;">
     {% for message in messages %}
     <p class="message{% if message.tags == 'error' %} error{% endif %}">{{ message }}</p>
     {% endfor %}
 </div>
 {% endif %}
 
-<div class="grid two">
-    <section class="panel details">
-        <h2>Admin account</h2>
-        <p><strong>Name:</strong> {{ user.first_name }} {{ user.last_name }}</p>
-        <p><strong>Phone number:</strong> {{ user.phone_number }}</p>
-        <p><strong>Email:</strong> {{ user.email }}</p>
-        <p><strong>Access:</strong> Staff dashboard</p>
-        <div class="links">
-            <a href="/admin/">Open Django admin</a>
-            <a href="{% url 'password_change' %}">Change password</a>
-        </div>
-        <form method="post" action="{% url 'logout' %}">
-            {% csrf_token %}
-            <button type="submit">Log out</button>
-        </form>
-    </section>
+<div class="tabs" style="display: flex; gap: 1rem; margin-bottom: 2rem; border-bottom: 1px solid var(--border);">
+    <button type="button" class="tab-btn active" onclick="switchTab('metrics')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--accent); border-bottom: 2px solid var(--accent); cursor: pointer; border-radius: 0;">Revenue Metrics</button>
+    <button type="button" class="tab-btn" onclick="switchTab('pricing')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Pricing & Rates</button>
+    <button type="button" class="tab-btn" onclick="switchTab('account')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Account Settings</button>
+</div>
 
-    <section class="panel">
-        <h2>Revenue summary</h2>
-        <div class="card-list">
-            <article class="card-item">
-                <h3>Total bookings</h3>
-                <p><strong>{{ booking_summary.total_bookings }}</strong></p>
-            </article>
-            <article class="card-item">
-                <h3>Active bookings</h3>
-                <p><strong>{{ booking_summary.active_bookings }}</strong></p>
-            </article>
-            <article class="card-item">
-                <h3>Delivered bookings</h3>
-                <p><strong>{{ booking_summary.delivered_bookings }}</strong></p>
-            </article>
-            <article class="card-item">
-                <h3>Total quoted revenue</h3>
-                <p><strong>KES {{ booking_summary.total_revenue }}</strong></p>
-            </article>
-            <article class="card-item">
-                <h3>Active revenue</h3>
-                <p><strong>KES {{ booking_summary.active_revenue }}</strong></p>
-            </article>
-            <article class="card-item">
-                <h3>Delivered revenue</h3>
-                <p><strong>KES {{ booking_summary.delivered_revenue }}</strong></p>
-            </article>
+<!-- Tab 1: Metrics -->
+<div id="tab-metrics" class="tab-content" style="display: block;">
+    <div class="stack" style="max-width: 1100px; margin: 0 auto; gap: 2rem;">
+        <section class="panel">
+            <h3 style="margin-bottom: 1.5rem; font-size: 1.25rem;">Platform Revenue Summary</h3>
+            <div class="metric-grid">
+                <div class="metric-card">
+                    <h3>Total Bookings</h3>
+                    <p>{{ booking_summary.total_bookings }}</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Active Deliveries</h3>
+                    <p>{{ booking_summary.active_bookings }}</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Completed Deliveries</h3>
+                    <p>{{ booking_summary.delivered_bookings }}</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Total Quoted Revenue</h3>
+                    <p style="color: var(--accent-dark);">KES {{ booking_summary.total_revenue }}</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Active Trip Revenue</h3>
+                    <p style="color: #eab308;">KES {{ booking_summary.active_revenue }}</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Collected Revenue</h3>
+                    <p style="color: #16a34a;">KES {{ booking_summary.delivered_revenue }}</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel" style="padding: 1.5rem;">
+            <h3 style="margin-bottom: 1.5rem; font-size: 1.25rem;">Revenue by Class Pipeline</h3>
+            <div style="overflow-x: auto; padding: 0 0.5rem;">
+                {% if bookings_by_vehicle %}
+                <table style="margin-top: 0;">
+                    <thead>
+                        <tr>
+                            <th>Class</th>
+                            <th>Volume</th>
+                            <th>Est. Revenue</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in bookings_by_vehicle %}
+                        <tr>
+                            <td style="font-weight: 500;">{{ item.vehicle_type_required|title }}</td>
+                            <td>{{ item.bookings }}</td>
+                            <td>KES {{ item.revenue }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="muted" style="margin-top: 1rem;">No tracking data available yet.</p>
+                {% endif %}
+            </div>
+        </section>
+    </div>
+</div>
+
+<!-- Tab 2: Pricing -->
+<div id="tab-pricing" class="tab-content" style="display: none;">
+    <div class="stack" style="max-width: 900px; margin: 0 auto; gap: 2rem;">
+        <section class="panel" style="padding: 2rem;">
+            <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem;">
+                <div style="background: var(--accent); color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.2rem;">💰</div>
+                <div>
+                    <h2 style="margin: 0;">Configure Transport Rates</h2>
+                    <p class="muted" style="margin: 0; font-size: 0.9rem;">Update the base per-km fees for each vehicle class. These directly impact new booking quotes.</p>
+                </div>
+            </div>
+            
+            <form method="post" action="{% url 'admin-dashboard' %}" class="stack">
+                {% csrf_token %}
+                <div class="grid grid-2" style="gap: 1.5rem;">
+                    <label>Motorbike (per km)
+                        {{ rate_form.motorbike }}
+                    </label>
+                    <label>Pickup (per km)
+                        {{ rate_form.pickup }}
+                    </label>
+                    <label>Van (per km)
+                        {{ rate_form.van }}
+                    </label>
+                    <label>Truck (per km)
+                        {{ rate_form.truck }}
+                    </label>
+                </div>
+                <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
+                     <button type="submit" class="btn" style="padding: 1rem 2.5rem; font-size: 1.1rem; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);">Apply Global Rate Changes</button>
+                </div>
+            </form>
+        </section>
+
+        <section class="panel" style="padding: 2rem;">
+            <h3 style="margin-bottom: 1.5rem;">Active Rate Sheet</h3>
+            <div style="overflow-x: auto; padding: 0;">
+                <table style="margin-top: 0;">
+                    <thead>
+                        <tr>
+                            <th>Vehicle Class</th>
+                            <th>Rate (KES / km)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for rate in current_rates %}
+                        <tr>
+                            <td style="font-weight: 500; font-size: 1.05rem;">{{ rate.label }}</td>
+                            <td style="font-family: monospace; font-size: 1.1rem;">KES {{ rate.price_per_km }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</div>
+
+<!-- Tab 3: Account -->
+<div id="tab-account" class="tab-content" style="display: none;">
+    <section class="panel" style="max-width: 600px; margin: 0 auto; padding: 2rem;">
+        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem;">
+            <div style="background: var(--accent); color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.2rem;">🛡️</div>
+            <div>
+                <h2 style="margin: 0;">Admin Account Info</h2>
+                <p class="muted" style="margin: 0; font-size: 0.9rem;">Platform Access Settings</p>
+            </div>
         </div>
+        
+        <div class="stack" style="gap: 1rem; font-size: 1.05rem; background: #f8fafc; padding: 1.5rem; border: 1px solid var(--border); border-radius: var(--radius-md);">
+            <p style="margin: 0;"><strong>Name:</strong> {{ user.first_name }} {{ user.last_name }}</p>
+            <p style="margin: 0;"><strong>Phone:</strong> {{ user.phone_number }}</p>
+            <p style="margin: 0;"><strong>Email:</strong> {{ user.email }}</p>
+            <p style="margin: 0;"><strong>Access Level:</strong> Staff Platform Dashboard</p>
+        </div>
+        
+        <div style="display: flex; gap: 1rem; margin-top: 2rem; flex-wrap: wrap;">
+            <a href="/admin/" class="btn btn-outline" style="flex: 1; text-align: center; padding: 1rem;">Django Admin</a>
+            <a href="{% url 'password_change' %}" class="btn btn-outline" style="flex: 1; text-align: center; padding: 1rem;">Change Password</a>
+        </div>
+        <form method="post" action="{% url 'logout' %}" style="margin-top: 1rem;">
+            {% csrf_token %}
+            <button type="submit" class="btn" style="width: 100%; background: #475569; border-color: #475569; padding: 1rem; font-size: 1.05rem;">Sign Out</button>
+        </form>
     </section>
 </div>
 
-<div class="grid two" style="margin-top: 1rem;">
-    <section class="panel">
-        <h2>Current transport rates</h2>
-        <form method="post" action="{% url 'admin-dashboard' %}" class="stack">
-            {% csrf_token %}
-            <div class="row">
-                <label>
-                    Motorbike rate per km
-                    {{ rate_form.motorbike }}
-                </label>
-                <label>
-                    Pickup rate per km
-                    {{ rate_form.pickup }}
-                </label>
-            </div>
-            <div class="row">
-                <label>
-                    Van rate per km
-                    {{ rate_form.van }}
-                </label>
-                <label>
-                    Truck rate per km
-                    {{ rate_form.truck }}
-                </label>
-            </div>
-            <button type="submit">Save transport rates</button>
-        </form>
-        <table style="margin-top: 1rem;">
-            <thead>
-                <tr>
-                    <th>Vehicle type</th>
-                    <th>Active rate per km</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for rate in current_rates %}
-                <tr>
-                    <td>{{ rate.label }}</td>
-                    <td>KES {{ rate.price_per_km }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </section>
-
-    <section class="panel">
-        <h2>Revenue by vehicle type</h2>
-        {% if bookings_by_vehicle %}
-        <table>
-            <thead>
-                <tr>
-                    <th>Vehicle type</th>
-                    <th>Bookings</th>
-                    <th>Revenue</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in bookings_by_vehicle %}
-                <tr>
-                    <td>{{ item.vehicle_type_required|title }}</td>
-                    <td>{{ item.bookings }}</td>
-                    <td>KES {{ item.revenue }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="muted">No bookings have been created yet.</p>
-        {% endif %}
-    </section>
-</div>
+<script>
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.style.color = 'var(--muted)';
+            btn.style.borderBottom = 'none';
+        });
+        
+        document.getElementById(`tab-${tabId}`).style.display = 'block';
+        const activeBtn = document.querySelector(`.tab-btn[onclick="switchTab('${tabId}')"]`);
+        if(activeBtn) {
+            activeBtn.style.color = 'var(--accent)';
+            activeBtn.style.borderBottom = '2px solid var(--accent)';
+        }
+    }
+</script>
 {% endblock %}

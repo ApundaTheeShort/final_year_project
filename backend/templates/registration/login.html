@@ -1,28 +1,45 @@
 {% extends "base.html" %}
 
-{% block title %}Sign In{% endblock %}
+{% block title %}Sign In | FreshHaul{% endblock %}
 
 {% block content %}
-<h1>Sign in</h1>
-<p>Use your phone number and password to access map-based booking, transporter matching, and live delivery tracking.</p>
+<div style="text-align: center; margin-bottom: 2rem;">
+    <h1>Welcome back</h1>
+    <p>Sign in to access map-based booking and live tracking.</p>
+</div>
 
 {% if form.errors %}
-<p class="errornote">Your credentials did not match an active account. Try again.</p>
+<div class="errornote">
+    Your credentials did not match an active account. Please try again.
+</div>
 {% endif %}
 
 {% if next %}
-<p>You will be redirected after a successful sign in.</p>
+<p style="text-align: center; color: var(--info);">You will be redirected after signing in.</p>
 {% endif %}
 
 <form method="post">
     {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Sign in</button>
+    
+    {% for field in form %}
+    <p>
+        {{ field.label_tag }}
+        {{ field }}
+        {% if field.help_text %}
+        <span class="helptext">{{ field.help_text }}</span>
+        {% endif %}
+        {% for error in field.errors %}
+        <span class="errorlist" style="display: block; margin-top: 0.5rem;">{{ error }}</span>
+        {% endfor %}
+    </p>
+    {% endfor %}
+    
+    <button type="submit" style="width: 100%; margin-top: 1rem;">Sign In</button>
     <input type="hidden" name="next" value="{{ next }}">
 </form>
 
 <div class="links">
-    <a href="{% url 'signup' %}">Need an account? Sign up</a>
-    <a href="{% url 'password_reset' %}">Forgot your password?</a>
+    <a href="{% url 'signup' %}">Don't have an account? Sign up</a>
+    <a href="{% url 'password_reset' %}" style="color: var(--muted); font-size: 0.95rem;">Forgot your password?</a>
 </div>
 {% endblock %}

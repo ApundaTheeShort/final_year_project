@@ -1,19 +1,35 @@
 {% extends "base.html" %}
 
-{% block title %}Create Account{% endblock %}
+{% block title %}Create Account | FreshHaul{% endblock %}
 
 {% block content %}
-<h1>Create account</h1>
-<p>Register as a farmer or transporter. Farmers create pickup and delivery bookings from map-selected places, while transporters publish vehicles, pricing, and live location.</p>
+<div style="text-align: center; margin-bottom: 2rem;">
+    <h1>Join FreshHaul</h1>
+    <p>Register as a farmer to effortlessly move your produce, or as a transporter to find reliable jobs.</p>
+</div>
 
 <form method="post">
     {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Create account</button>
+    
+    <div class="grid grid-2" style="gap: 1rem;">
+        {% for field in form %}
+            <div style="{% if forloop.last or field.name == 'phone_number' or field.name == 'email' %}grid-column: 1 / -1;{% endif %}">
+                {{ field.label_tag }}
+                {{ field }}
+                {% if field.help_text %}
+                <span class="helptext">{{ field.help_text }}</span>
+                {% endif %}
+                {% for error in field.errors %}
+                <span class="errorlist" style="display: block; margin-top: 0.5rem;">{{ error }}</span>
+                {% endfor %}
+            </div>
+        {% endfor %}
+    </div>
+    
+    <button type="submit" style="width: 100%; margin-top: 2rem;">Create Account</button>
 </form>
 
 <div class="links">
     <a href="{% url 'login' %}">Already have an account? Sign in</a>
-    <a href="{% url 'password_reset' %}">Forgot your password?</a>
 </div>
 {% endblock %}

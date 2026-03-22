@@ -1,200 +1,260 @@
 {% extends "base.html" %}
 
-{% block title %}Farmer Dashboard{% endblock %}
+{% block title %}Farmer Dashboard | FreshHaul{% endblock %}
 {% block page_class %}wide{% endblock %}
-{% block card_class %}dashboard{% endblock %}
 
 {% block extra_head %}
-<link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
-    crossorigin=""
->
 <style>
     #booking-map {
-        min-height: 460px;
-        border-radius: 18px;
+        min-height: 480px;
+        border-radius: var(--radius-lg);
         overflow: hidden;
         border: 1px solid var(--border);
+        box-shadow: var(--shadow-sm);
+        z-index: 10;
     }
 
     #tracking-map {
-        min-height: 420px;
-        border-radius: 18px;
+        min-height: 480px;
+        border-radius: var(--radius-lg);
         overflow: hidden;
         border: 1px solid var(--border);
+        box-shadow: var(--shadow-sm);
+        z-index: 10;
     }
 
     .mode-switch {
         display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
+        gap: 0.5rem;
+        background: #f1f5f9;
+        padding: 0.5rem;
+        border-radius: var(--radius-md);
+        margin-bottom: 1rem;
     }
 
     .mode-switch button {
-        background: #fff;
-        color: var(--text);
-        border: 1px solid var(--border);
+        flex: 1;
+        background: transparent;
+        color: var(--muted);
+        box-shadow: none;
+        border-radius: var(--radius-sm);
     }
 
     .mode-switch button.active {
-        background: var(--accent);
-        color: #fff;
-        border-color: var(--accent);
+        background: #fff;
+        color: var(--text);
+        box-shadow: var(--shadow-sm);
     }
+
+    .card-list { display: grid; gap: 1rem; }
+    .card-item {
+        background: rgba(255,255,255,0.8);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: 1.5rem;
+        position: relative;
+    }
+    
+    .place-chip {
+        padding: 1.25rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background: #fff;
+        box-shadow: var(--shadow-sm);
+        margin-bottom: 1rem;
+    }
+
+    .result-item {
+        width: 100%;
+        text-align: left;
+        padding: 1rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background: #fff;
+        cursor: pointer;
+        transition: all 0.2s;
+        margin-bottom: 0.5rem;
+    }
+    .result-item:hover, .result-item.selected {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.1);
+    }
+    .result-item small { color: var(--accent); display: inline-block; margin-top: 0.5rem; font-weight: 500; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="hero">
-    <h1>Farmer dispatch dashboard</h1>
-    <p>Pick pickup and delivery points directly on the map or by search, preview the route, and send the booking to nearby transporters.</p>
+<div class="panel" style="background: linear-gradient(135deg, rgba(16,185,129,0.1), transparent); border-color: rgba(16,185,129,0.2); margin-bottom: 2rem;">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <h1>Dispatch Dashboard</h1>
+            <p style="margin: 0;">Map-driven routing, instant transporter matching, and live delivery tracking.</p>
+        </div>
+        <div style="text-align: right;">
+            <p style="margin: 0; font-weight: 600;">{{ user.first_name }} {{ user.last_name }}</p>
+            <span class="status-badge" style="background: var(--text); color: white;">Farmer</span>
+        </div>
+    </div>
 </div>
 
-<div class="grid two">
-    <section class="panel details">
-        <h2>Your account</h2>
-        <p><strong>Name:</strong> {{ user.first_name }} {{ user.last_name }}</p>
-        <p><strong>Phone number:</strong> {{ user.phone_number }}</p>
-        <p><strong>Email:</strong> {{ user.email }}</p>
-        <p><strong>Role:</strong> {{ user.role|title }}</p>
-        <p><strong>Map APIs:</strong> `/api/maps/places/search/`, `/api/maps/places/reverse/`, `/api/maps/routes/preview/`</p>
-        <div class="links">
-            <a href="{% url 'password_change' %}">Change password</a>
+<div class="tabs" style="display: flex; gap: 1rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border);">
+    <button type="button" class="tab-btn active" onclick="switchTab('create')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--accent); border-bottom: 2px solid var(--accent); cursor: pointer; border-radius: 0;">Create Booking</button>
+    <button type="button" class="tab-btn" onclick="switchTab('list')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">My Bookings</button>
+    <button type="button" class="tab-btn" onclick="switchTab('track')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Live Tracking</button>
+    <button type="button" class="tab-btn" onclick="switchTab('account')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Account Profile</button>
+</div>
+
+<div id="tab-create" class="tab-content" style="display: block;">
+    <div class="stack" style="max-width: 960px; margin: 0 auto; gap: 2rem;">
+        
+        <!-- Step 1: Route Setup -->
+        <section class="panel" style="padding: 2rem;">
+            <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;">
+                <div style="background: var(--accent); color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.2rem;">1</div>
+                <div>
+                    <h2 style="margin: 0;">Set Transport Route</h2>
+                    <p class="muted" style="margin: 0; font-size: 0.9rem;">Select pickup and delivery locations via map or search.</p>
+                </div>
+            </div>
+            
+            <div class="grid grid-2" style="gap: 2rem; margin-bottom: 1.5rem;">
+                <!-- Setup side -->
+                <div class="stack">
+                    <div class="mode-switch">
+                        <button type="button" id="pickup-mode" class="active">📍 Pickup</button>
+                        <button type="button" id="dropoff-mode">🎯 Delivery</button>
+                    </div>
+                    
+                    <div style="display: flex; gap: 0.5rem; margin-bottom: 1rem; flex-wrap: wrap;">
+                        <button type="button" class="btn btn-outline" id="pickup-current-location" style="flex: 1; padding: 0.5rem; font-size: 0.85rem;">My Location (Pickup)</button>
+                        <button type="button" class="btn btn-outline" id="dropoff-current-location" style="flex: 1; padding: 0.5rem; font-size: 0.85rem;">My Location (Delivery)</button>
+                    </div>
+
+                    <div class="search-section">
+                        <label>Search Pickup / Delivery Locations</label>
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <input id="pickup-query" placeholder="Search pickup...">
+                            <button type="button" class="btn" id="pickup-search">🔍</button>
+                        </div>
+                        <div id="pickup-results" style="max-height: 150px; overflow-y: auto;"></div>
+
+                        <div style="display: flex; gap: 0.5rem; margin-top: 1rem; margin-bottom: 0.5rem;">
+                            <input id="dropoff-query" placeholder="Search delivery...">
+                            <button type="button" class="btn" id="dropoff-search">🔍</button>
+                        </div>
+                        <div id="dropoff-results" style="max-height: 150px; overflow-y: auto;"></div>
+                        <p id="search-message" class="message" style="margin-top: 0.5rem;" hidden></p>
+                    </div>
+
+                    <div style="margin-top: 1rem;">
+                        <h4 style="margin:0 0 0.5rem 0;">Selected Locations</h4>
+                        <div id="pickup-selected" class="place-chip" style="padding: 1rem; margin-bottom: 0.5rem;">
+                            <h5 style="margin:0 0 0.25rem 0; color: var(--accent);">Pickup</h5>
+                            <p class="muted" style="font-size: 0.85rem; margin:0;">Not selected</p>
+                        </div>
+                        <div id="dropoff-selected" class="place-chip" style="padding: 1rem; margin-bottom: 0;">
+                            <h5 style="margin:0 0 0.25rem 0; color: var(--accent);">Delivery</h5>
+                            <p class="muted" style="font-size: 0.85rem; margin:0;">Not selected</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Map side -->
+                <div class="stack">
+                    <div id="booking-map" style="min-height: 480px; height: 100%; border-radius: var(--radius-md); box-shadow: inset 0 0 0 1px var(--border);"></div>
+                    <p id="map-message" class="message" style="margin-top: 0.5rem;" hidden></p>
+                </div>
+            </div>
+            
+            <div id="route-preview" style="padding: 1.5rem; background: #f8fafc; border: 1px solid var(--border); border-radius: var(--radius-md); text-align: center;">
+                <p class="muted" style="margin: 0;">Select both places to preview distance and duration.</p>
+            </div>
+        </section>
+
+        <!-- Step 2: Produce Details -->
+        <section class="panel" style="padding: 2rem;">
+            <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;">
+                <div style="background: var(--accent); color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.2rem;">2</div>
+                <div>
+                    <h2 style="margin: 0;">Produce Details</h2>
+                    <p class="muted" style="margin: 0; font-size: 0.9rem;">Review your route and provide payload details to dispatch the request.</p>
+                </div>
+            </div>
+            
+            <form id="booking-form" class="stack">
+                <div class="grid grid-2" style="gap: 1.5rem;">
+                    <label>Produce Name
+                        <input name="produce_name" placeholder="e.g. Tomatoes" required style="padding: 1rem; font-size: 1.05rem; margin-top: 0.5rem;">
+                    </label>
+                    <label>Total Weight (kg)
+                        <input name="weight_kg" type="number" step="0.01" min="0.01" placeholder="e.g. 50" required style="padding: 1rem; font-size: 1.05rem; margin-top: 0.5rem;">
+                    </label>
+                </div>
+                <label style="margin-top: 0.5rem;">Description (Optional)
+                    <textarea name="produce_description" placeholder="Any special handling instructions..." style="min-height: 100px; padding: 1rem; font-size: 1.05rem; margin-top: 0.5rem;"></textarea>
+                </label>
+                
+                <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
+                     <button type="submit" class="btn" style="padding: 1rem 2.5rem; font-size: 1.1rem; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);">Dispatch Booking Request</button>
+                </div>
+            </form>
+            <p id="booking-message" class="message" style="margin-top: 1.5rem;" hidden></p>
+        </section>
+    </div>
+</div>
+
+<div id="tab-list" class="tab-content" style="display: none;">
+    <section class="panel">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h3 style="margin: 0; font-size: 1.5rem;">My Bookings</h3>
+            <button type="button" class="btn btn-outline" id="reload-bookings" style="padding: 0.5rem 1rem;">Refresh</button>
         </div>
-        <form method="post" action="{% url 'logout' %}">
+        <div id="booking-list" class="card-list" style="overflow-y: visible;"></div>
+    </section>
+</div>
+
+<div id="tab-track" class="tab-content" style="display: none;">
+    <section class="panel">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+            <h2 style="margin: 0;">Live Tracking Map</h2>
+            <button type="button" class="btn btn-danger" id="stop-tracking" hidden>Stop Tracking</button>
+        </div>
+        <div class="grid grid-2">
+            <div id="tracking-map"></div>
+            <div id="tracking-summary" class="panel" style="background: #fff; border: 1px solid var(--border);">
+                <p class="muted">Click <strong>Track live</strong> on a booking to follow the transporter.</p>
+            </div>
+        </div>
+        <p id="tracking-message" class="message" style="margin-top: 1rem;" hidden></p>
+    </section>
+</div>
+<div id="tab-account" class="tab-content" style="display: none;">
+    <section class="panel" style="max-width: 600px; margin: 0 auto; padding: 2rem;">
+        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem;">
+            <div style="background: var(--accent); color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.2rem;">👤</div>
+            <div>
+                <h2 style="margin: 0;">User Account Info</h2>
+                <p class="muted" style="margin: 0; font-size: 0.9rem;">Your personal details and security.</p>
+            </div>
+        </div>
+        
+        <div class="stack" style="gap: 1rem; font-size: 1.05rem; background: #f8fafc; padding: 1.5rem; border: 1px solid var(--border); border-radius: var(--radius-md);">
+            <p style="margin: 0;"><strong>Name:</strong> {{ user.first_name }} {{ user.last_name }}</p>
+            <p style="margin: 0;"><strong>Phone:</strong> {{ user.phone_number }}</p>
+            <p style="margin: 0;"><strong>Email:</strong> {{ user.email }}</p>
+            <p style="margin: 0;"><strong>Role:</strong> Farmer</p>
+        </div>
+        
+        <div style="display: flex; gap: 1rem; margin-top: 2rem; flex-wrap: wrap;">
+            <a href="{% url 'password_change' %}" class="btn btn-outline" style="flex: 1; text-align: center; padding: 1rem;">Change Password</a>
+        </div>
+        <form method="post" action="{% url 'logout' %}" style="margin-top: 1rem;">
             {% csrf_token %}
-            <button type="submit">Log out</button>
+            <button type="submit" class="btn" style="width: 100%; background: #ef4444; border-color: #ef4444; padding: 1rem; font-size: 1.05rem; box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);">Sign Out</button>
         </form>
     </section>
-
-    <section class="panel">
-        <h2>Map booking flow</h2>
-        <div class="timeline">
-            <div class="timeline-item">
-                <strong>1. Choose selection mode</strong>
-                <p>Switch between pickup and delivery mode, then click on the map or select a search result.</p>
-            </div>
-            <div class="timeline-item">
-                <strong>2. Review route</strong>
-                <p>The route line is drawn on the map and the backend returns distance and duration.</p>
-            </div>
-            <div class="timeline-item">
-                <strong>3. Create booking</strong>
-                <p>The backend expands the transporter search automatically from the closest drivers outward until it finds matching vehicles.</p>
-            </div>
-        </div>
-    </section>
 </div>
 
-<div class="grid two" style="margin-top: 1rem;">
-    <section class="panel">
-        <h2>Interactive map</h2>
-        <div class="stack">
-            <div class="mode-switch">
-                <button type="button" id="pickup-mode" class="active">Select pickup</button>
-                <button type="button" id="dropoff-mode">Select delivery</button>
-            </div>
-            <div class="row actions">
-                <button type="button" id="pickup-current-location">Use my location for pickup</button>
-                <button type="button" id="dropoff-current-location">Use my location for delivery</button>
-            </div>
-            <div id="booking-map"></div>
-            <p id="map-message" class="message" hidden></p>
-        </div>
-    </section>
-
-    <section class="panel">
-        <h2>Search places</h2>
-        <div class="search-grid">
-            <div class="stack">
-                <h3>Pickup search</h3>
-                <div class="row actions">
-                    <input id="pickup-query" placeholder="Search pickup place">
-                    <button type="button" id="pickup-search">Search pickup</button>
-                </div>
-                <div id="pickup-results" class="search-results"></div>
-            </div>
-            <div class="stack">
-                <h3>Delivery search</h3>
-                <div class="row actions">
-                    <input id="dropoff-query" placeholder="Search delivery place">
-                    <button type="button" id="dropoff-search">Search delivery</button>
-                </div>
-                <div id="dropoff-results" class="search-results"></div>
-            </div>
-        </div>
-        <p id="search-message" class="message" hidden></p>
-    </section>
-</div>
-
-<div class="grid two" style="margin-top: 1rem;">
-    <section class="panel">
-        <h2>Selected places</h2>
-        <div class="stack">
-            <div id="pickup-selected" class="place-chip">
-                <h3>Pickup</h3>
-                <p class="muted">No pickup place selected yet.</p>
-            </div>
-            <div id="dropoff-selected" class="place-chip">
-                <h3>Delivery</h3>
-                <p class="muted">No delivery place selected yet.</p>
-            </div>
-        </div>
-    </section>
-
-    <section class="panel">
-        <h2>Route preview</h2>
-        <div id="route-preview" class="map-box">
-            <p class="muted">Select both places to preview route distance, duration, and map geometry.</p>
-        </div>
-    </section>
-</div>
-
-<section class="panel" style="margin-top: 1rem;">
-    <h2>Create booking</h2>
-    <form id="booking-form" class="stack">
-        <div class="row">
-            <label>
-                Produce name
-                <input name="produce_name" required>
-            </label>
-            <label>
-                Weight (kg)
-                <input name="weight_kg" type="number" step="0.01" min="0.01" required>
-            </label>
-        </div>
-        <label>
-            Produce description
-            <textarea name="produce_description"></textarea>
-        </label>
-        <button type="submit">Create booking from mapped places</button>
-    </form>
-    <p id="booking-message" class="message" hidden></p>
-</section>
-
-<section class="panel" style="margin-top: 1rem;">
-    <div class="row">
-        <h2>My bookings</h2>
-        <button type="button" id="reload-bookings">Refresh bookings</button>
-    </div>
-    <div id="booking-list" class="card-list"></div>
-</section>
-
-<section class="panel" style="margin-top: 1rem;">
-    <div class="row">
-        <h2>Live transport tracking</h2>
-        <button type="button" id="stop-tracking" hidden>Stop tracking</button>
-    </div>
-    <div class="grid two">
-        <div id="tracking-map"></div>
-        <div id="tracking-summary" class="stack">
-            <p class="muted">Click `Track live` on a booking to open its route and follow the transporter from pickup to destination.</p>
-        </div>
-    </div>
-    <p id="tracking-message" class="message" hidden></p>
-</section>
 
 <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
@@ -347,7 +407,7 @@
             <div class="stack">
                 <div class="row">
                     <h3>Booking #${escapeHtml(booking.id)}: ${escapeHtml(booking.produce_name)}</h3>
-                    <span class="status">${escapeHtml(booking.status)}</span>
+                    <span class="status-badge status-${escapeHtml(booking.status)}">${escapeHtml(booking.status)}</span>
                 </div>
                 <p class="meta">Transporter: ${escapeHtml(transporterName)}</p>
                 <p class="meta">Pickup: ${escapeHtml(booking.pickup_address)}</p>
@@ -693,18 +753,19 @@
             <article class="card-item">
                 <div class="row">
                     <h3>${escapeHtml(booking.produce_name)}</h3>
-                    <span class="status">${escapeHtml(booking.status)}</span>
+                    <span class="status-badge status-${escapeHtml(booking.status)}">${escapeHtml(booking.status)}</span>
                 </div>
                 <p class="meta">Weight: ${escapeHtml(booking.weight_kg)} kg</p>
                 <p class="meta">Pickup: ${escapeHtml(booking.pickup_place?.address || booking.pickup_address)}</p>
                 <p class="meta">Dropoff: ${escapeHtml(booking.dropoff_place?.address || booking.dropoff_address)}</p>
                 <p class="meta">Distance: ${escapeHtml(booking.estimated_distance_km || "N/A")} km</p>
-                <p class="meta">Duration: ${escapeHtml(booking.estimated_duration_minutes || "N/A")} minutes</p>
                 <p class="meta">Vehicle needed: ${escapeHtml(booking.vehicle_type_required)}</p>
                 <p class="meta">Assigned transporter: ${escapeHtml(transporter)}</p>
                 <p class="meta">Quoted price: ${escapeHtml(booking.quoted_price || "Pending")}</p>
-                ${booking.status === "pending" ? `<button type="button" data-delete-booking-id="${booking.id}">Delete booking</button>` : ""}
-                <button type="button" data-track-booking-id="${booking.id}">Track live</button>
+                <div class="action-row" style="margin-top: 1rem;">
+                    ${booking.status === "pending" ? `<button type="button" class="btn btn-danger" data-delete-booking-id="${booking.id}">Delete booking</button>` : ""}
+                    <button type="button" class="btn btn-outline" data-track-booking-id="${booking.id}">Track live</button>
+                </div>
             </article>
         `;
     }
@@ -759,6 +820,7 @@
         if (trackButton) {
             const bookingId = Number(trackButton.dataset.trackBookingId);
             await startTracking(bookingId);
+            switchTab('track');
             return;
         }
 
@@ -815,5 +877,28 @@
     renderTrackingSummary();
     loadBookings();
     state.bookingsPollId = window.setInterval(loadBookings, 10000);
+
+    window.switchTab = function(tabId) {
+        document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.style.color = 'var(--muted)';
+            btn.style.borderBottom = 'none';
+        });
+        
+        document.getElementById(`tab-${tabId}`).style.display = 'block';
+        const activeBtn = document.querySelector(`.tab-btn[onclick="switchTab('${tabId}')"]`);
+        if(activeBtn) {
+            activeBtn.style.color = 'var(--accent)';
+            activeBtn.style.borderBottom = '2px solid var(--accent)';
+        }
+
+        if (tabId === 'create') {
+            setTimeout(() => map.invalidateSize(), 50);
+        } else if (tabId === 'track') {
+            setTimeout(() => trackingMap.invalidateSize(), 50);
+        } else if (tabId === 'list') {
+            loadBookings();
+        }
+    }
 </script>
 {% endblock %}

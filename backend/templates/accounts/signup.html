@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+
+{% block title %}Create Account{% endblock %}
+
+{% block content %}
+<h1>Create account</h1>
+<p>Register as a farmer or transporter. Farmers create pickup and delivery bookings from map-selected places, while transporters publish vehicles, pricing, and live location.</p>
+
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Create account</button>
+</form>
+
+<div class="links">
+    <a href="{% url 'login' %}">Already have an account? Sign in</a>
+    <a href="{% url 'password_reset' %}">Forgot your password?</a>
+</div>
+{% endblock %}

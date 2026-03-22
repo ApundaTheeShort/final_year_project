@@ -1,0 +1,729 @@
+{% extends "base.html" %}
+
+{% block title %}Transporter Dashboard{% endblock %}
+{% block page_class %}wide{% endblock %}
+{% block card_class %}dashboard{% endblock %}
+
+{% block extra_head %}
+<link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+>
+<style>
+    #dispatch-map {
+        min-height: 480px;
+        border-radius: 18px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+    }
+
+    .vehicle-pills,
+    .action-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+
+    .vehicle-pill {
+        padding: 0.45rem 0.8rem;
+        border-radius: 999px;
+        background: rgba(15, 118, 110, 0.1);
+        color: var(--accent-dark);
+        font-size: 0.92rem;
+    }
+
+    .card-item {
+        border: 1px solid var(--border);
+        border-radius: 16px;
+        padding: 1rem;
+        background: #fff;
+    }
+
+    .card-item.active-card {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 2px rgba(15, 118, 110, 0.12);
+    }
+
+    .card-item h3 {
+        margin-bottom: 0.35rem;
+    }
+
+    .status.accepted,
+    .status.picked_up,
+    .status.in_transit {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+
+    .status.delivered {
+        background: #dcfce7;
+        color: #166534;
+    }
+
+    .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(31, 26, 23, 0.58);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        z-index: 1000;
+    }
+
+    .modal-backdrop[hidden] {
+        display: none;
+    }
+
+    .modal-card {
+        width: min(100%, 480px);
+        background: #fffdf8;
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        box-shadow: 0 30px 80px rgba(31, 26, 23, 0.28);
+        padding: 1.5rem;
+    }
+
+    .modal-card h3 {
+        margin-top: 0;
+        margin-bottom: 0.5rem;
+    }
+
+    .modal-card p {
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <h1>Transporter dispatch dashboard</h1>
+    <p>Edit vehicle details, accept farmer transport requests, and let the system capture your location so the dispatch map reflects the trip in near real time.</p>
+</div>
+
+<div class="grid">
+    <section class="panel details">
+        <h2>Your account</h2>
+        <p><strong>Name:</strong> {{ user.first_name }} {{ user.last_name }}</p>
+        <p><strong>Phone number:</strong> {{ user.phone_number }}</p>
+        <p><strong>Email:</strong> {{ user.email }}</p>
+        <p><strong>Role:</strong> {{ user.role|title }}</p>
+        <div class="links">
+            <a href="{% url 'password_change' %}">Change password</a>
+        </div>
+        <form method="post" action="{% url 'logout' %}">
+            {% csrf_token %}
+            <button type="submit">Log out</button>
+        </form>
+    </section>
+</div>
+
+<div class="grid two" style="margin-top: 1rem;">
+    <section class="panel">
+        <h2>Edit vehicle details</h2>
+        <form id="vehicle-form" class="stack">
+            <label>
+                Vehicle registration number
+                <input name="registration_number" required>
+            </label>
+            <div class="row">
+                <label>
+                    Vehicle type
+                    <select name="vehicle_type" required>
+                        <option value="motorbike">Motorbike</option>
+                        <option value="pickup">Pickup</option>
+                        <option value="van">Van</option>
+                        <option value="truck">Truck</option>
+                    </select>
+                </label>
+                <label>
+                    Capacity (kg)
+                    <input name="capacity_kg" type="number" step="0.01" min="0.01" required>
+                </label>
+            </div>
+            <div class="row">
+                <p class="muted">Transport charges are set by the system administrator based on vehicle type.</p>
+            </div>
+            <label>
+                Vehicle availability
+                <select name="is_available" required>
+                    <option value="true">Available</option>
+                    <option value="false">Busy</option>
+                </select>
+            </label>
+            <button type="submit">Save vehicle</button>
+        </form>
+        <p id="vehicle-message" class="message" hidden></p>
+    </section>
+
+    <section class="panel">
+        <h2>Selected booking</h2>
+        <div id="selected-booking">
+            <p class="muted">Choose an open request or active trip to inspect the pickup route and live dispatch map.</p>
+        </div>
+    </section>
+</div>
+
+<div class="grid two" style="margin-top: 1rem;">
+    <section class="panel">
+        <h2>Dispatch map</h2>
+        <div id="dispatch-map"></div>
+        <p id="map-message" class="message" hidden></p>
+    </section>
+
+    <section class="panel">
+        <div class="row">
+            <h2>Open requests near you</h2>
+            <button type="button" id="reload-open-bookings">Refresh open requests</button>
+        </div>
+        <div id="open-bookings" class="card-list"></div>
+    </section>
+</div>
+
+<section class="panel" style="margin-top: 1rem;">
+    <div class="row">
+        <h2>Accepted trips</h2>
+        <button type="button" id="reload-assigned-bookings">Refresh accepted trips</button>
+    </div>
+    <div id="assigned-bookings" class="card-list"></div>
+</section>
+
+<div id="driver-popup" class="modal-backdrop" hidden>
+    <div class="modal-card">
+        <h3 id="driver-popup-title">Notice</h3>
+        <p id="driver-popup-body"></p>
+        <button type="button" id="driver-popup-close">Okay</button>
+    </div>
+</div>
+
+<script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+></script>
+<script>
+    const csrfToken = document.cookie
+        .split("; ")
+        .find((row) => row.startsWith("csrftoken="))
+        ?.split("=")[1];
+
+    const state = {
+        setup: null,
+        openBookings: [],
+        assignedBookings: [],
+        selectedBookingId: null,
+        latestCoords: null,
+        watchId: null,
+        syncInFlight: false,
+        trackingBookingId: null,
+        dashboardPollId: null,
+    };
+
+    const map = L.map("dispatch-map").setView([-1.286389, 36.817223], 11);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap contributors",
+    }).addTo(map);
+
+    let pickupMarker = null;
+    let dropoffMarker = null;
+    let driverMarker = null;
+    let routeLine = null;
+    let trackingLine = null;
+
+    async function apiRequest(url, options = {}) {
+        const response = await fetch(url, {
+            credentials: "same-origin",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrfToken || "",
+                ...(options.headers || {}),
+            },
+            ...options,
+        });
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : null;
+        if (!response.ok) {
+            throw new Error(extractErrorMessage(data));
+        }
+        return data;
+    }
+
+    function extractErrorMessage(payload) {
+        if (!payload) {
+            return "Request failed.";
+        }
+        if (typeof payload === "string") {
+            return payload;
+        }
+        if (Array.isArray(payload)) {
+            return payload[0] || "Request failed.";
+        }
+        if (payload.non_field_errors?.length) {
+            return payload.non_field_errors[0];
+        }
+        if (payload.detail) {
+            return payload.detail;
+        }
+
+        for (const value of Object.values(payload)) {
+            if (Array.isArray(value) && value.length) {
+                return value[0];
+            }
+            if (typeof value === "string" && value) {
+                return value;
+            }
+        }
+        return "Request failed.";
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#39;");
+    }
+
+    function showMessage(element, message, isError = false) {
+        element.hidden = false;
+        element.textContent = message;
+        element.classList.toggle("error", isError);
+    }
+
+    function hideMessage(element) {
+        element.hidden = true;
+        element.textContent = "";
+        element.classList.remove("error");
+    }
+
+    function showPopup(message, title = "Notice") {
+        document.getElementById("driver-popup-title").textContent = title;
+        document.getElementById("driver-popup-body").textContent = message;
+        document.getElementById("driver-popup").hidden = false;
+    }
+
+    function hidePopup() {
+        document.getElementById("driver-popup").hidden = true;
+    }
+
+    function serializeForm(form) {
+        return Object.fromEntries(new FormData(form).entries());
+    }
+
+    function getPrimaryVehicle() {
+        return state.setup?.vehicles?.[0] || null;
+    }
+
+    function getSelectedBooking() {
+        return [...state.openBookings, ...state.assignedBookings].find(
+            (booking) => booking.id === state.selectedBookingId
+        ) || null;
+    }
+
+    function getActiveTrackingBooking() {
+        return state.assignedBookings.find((booking) =>
+            ["accepted", "picked_up", "in_transit"].includes(booking.status)
+        ) || null;
+    }
+
+    function formatStatus(status) {
+        return String(status || "").replaceAll("_", " ");
+    }
+
+    function statusActionForBooking(booking) {
+        if (booking.status === "accepted") {
+            return {label: "Picked up", nextStatus: "picked_up"};
+        }
+        if (booking.status === "in_transit") {
+            return {label: "Delivered", nextStatus: "delivered"};
+        }
+        return null;
+    }
+
+    function populateVehicleForm() {
+        const vehicle = getPrimaryVehicle();
+        if (!vehicle) {
+            return;
+        }
+        const form = document.getElementById("vehicle-form");
+        form.querySelector('[name="registration_number"]').value = vehicle.registration_number || "";
+        form.querySelector('[name="vehicle_type"]').value = vehicle.vehicle_type || "pickup";
+        form.querySelector('[name="capacity_kg"]').value = vehicle.capacity_kg || "";
+        form.querySelector('[name="is_available"]').value = vehicle.is_available ? "true" : "false";
+    }
+
+    function renderSelectedBooking() {
+        const element = document.getElementById("selected-booking");
+        const booking = getSelectedBooking();
+        if (!booking) {
+            element.innerHTML = '<p class="muted">Choose an open request or active trip to inspect the pickup route and live dispatch map.</p>';
+            return;
+        }
+
+        const statusAction = statusActionForBooking(booking);
+        element.innerHTML = `
+            <div class="stack">
+                <div class="row">
+                    <h3>Booking #${booking.id}: ${escapeHtml(booking.produce_name)}</h3>
+                    <span class="status ${escapeHtml(booking.status)}">${escapeHtml(formatStatus(booking.status))}</span>
+                </div>
+                <p class="meta">Pickup: ${escapeHtml(booking.pickup_address)}</p>
+                <p class="meta">Dropoff: ${escapeHtml(booking.dropoff_address)}</p>
+                <p class="meta">Weight: ${escapeHtml(booking.weight_kg)} kg</p>
+                <p class="meta">Distance: ${escapeHtml(booking.estimated_distance_km || "N/A")} km</p>
+                <p class="meta">Duration: ${escapeHtml(booking.estimated_duration_minutes || "N/A")} minutes</p>
+                <p class="meta">Quoted price: ${escapeHtml(booking.quoted_price || "Pending")}</p>
+                <p class="meta">Live route tracking is shown on the map.</p>
+                ${booking.status === "picked_up" ? '<p class="muted">Status will change to in transit automatically once you move away from the pickup point.</p>' : ""}
+                ${statusAction ? `<button type="button" data-progress-booking-id="${booking.id}" data-next-status="${statusAction.nextStatus}">${statusAction.label}</button>` : ""}
+            </div>
+        `;
+
+        document.querySelectorAll('.card-item[data-booking-id]').forEach((card) => {
+            card.classList.toggle("active-card", Number(card.dataset.bookingId) === booking.id);
+        });
+    }
+
+    function clearMapLayers() {
+        if (pickupMarker) {
+            map.removeLayer(pickupMarker);
+            pickupMarker = null;
+        }
+        if (dropoffMarker) {
+            map.removeLayer(dropoffMarker);
+            dropoffMarker = null;
+        }
+        if (driverMarker) {
+            map.removeLayer(driverMarker);
+            driverMarker = null;
+        }
+        if (routeLine) {
+            map.removeLayer(routeLine);
+            routeLine = null;
+        }
+        if (trackingLine) {
+            map.removeLayer(trackingLine);
+            trackingLine = null;
+        }
+    }
+
+    function renderMap() {
+        clearMapLayers();
+        const booking = getSelectedBooking();
+        if (!booking) {
+            if (state.latestCoords) {
+                driverMarker = L.marker([state.latestCoords.latitude, state.latestCoords.longitude]).addTo(map).bindPopup("Your live location");
+                map.setView([state.latestCoords.latitude, state.latestCoords.longitude], 13);
+            }
+            return;
+        }
+
+        pickupMarker = L.marker([Number(booking.pickup_latitude), Number(booking.pickup_longitude)])
+            .addTo(map)
+            .bindPopup("Pickup");
+        dropoffMarker = L.marker([Number(booking.dropoff_latitude), Number(booking.dropoff_longitude)])
+            .addTo(map)
+            .bindPopup("Dropoff");
+
+        const routeCoordinates = booking.route_geometry?.coordinates?.map((pair) => [pair[1], pair[0]]) || [
+            [Number(booking.pickup_latitude), Number(booking.pickup_longitude)],
+            [Number(booking.dropoff_latitude), Number(booking.dropoff_longitude)],
+        ];
+        routeLine = L.polyline(routeCoordinates, {color: "#0f766e", weight: 5, opacity: 0.85}).addTo(map);
+
+        const trackingCoordinates = (booking.tracking_updates || []).map((update) => [
+            Number(update.latitude),
+            Number(update.longitude),
+        ]);
+        if (trackingCoordinates.length) {
+            trackingLine = L.polyline(trackingCoordinates, {color: "#f59e0b", weight: 4, opacity: 0.9}).addTo(map);
+            const lastPoint = trackingCoordinates[trackingCoordinates.length - 1];
+            driverMarker = L.marker(lastPoint).addTo(map).bindPopup("Live transporter location");
+        } else if (state.latestCoords) {
+            driverMarker = L.marker([state.latestCoords.latitude, state.latestCoords.longitude]).addTo(map).bindPopup("Live transporter location");
+        }
+
+        const bounds = L.featureGroup(
+            [pickupMarker, dropoffMarker, routeLine, trackingLine, driverMarker].filter(Boolean)
+        ).getBounds();
+        if (bounds.isValid()) {
+            map.fitBounds(bounds, {padding: [30, 30]});
+        }
+    }
+
+    function selectBooking(bookingId) {
+        state.selectedBookingId = bookingId;
+        renderSelectedBooking();
+        renderMap();
+    }
+
+    function bookingCard(booking, {open}) {
+        const vehicle = getPrimaryVehicle();
+        const canAccept = open
+            && vehicle
+            && vehicle.is_available
+            && vehicle.vehicle_type === booking.vehicle_type_required
+            && Number(vehicle.capacity_kg) >= Number(booking.weight_kg);
+        const statusAction = !open ? statusActionForBooking(booking) : null;
+
+        return `
+            <article class="card-item" data-booking-id="${booking.id}">
+                <div class="row">
+                    <h3>Booking #${booking.id}: ${escapeHtml(booking.produce_name)}</h3>
+                    <span class="status ${escapeHtml(booking.status)}">${escapeHtml(formatStatus(booking.status))}</span>
+                </div>
+                <p class="meta">Pickup: ${escapeHtml(booking.pickup_address)}</p>
+                <p class="meta">Dropoff: ${escapeHtml(booking.dropoff_address)}</p>
+                <p class="meta">Weight: ${escapeHtml(booking.weight_kg)} kg</p>
+                <p class="meta">Distance: ${escapeHtml(booking.estimated_distance_km || "N/A")} km</p>
+                <p class="meta">Duration: ${escapeHtml(booking.estimated_duration_minutes || "N/A")} minutes</p>
+                <p class="meta">Vehicle needed: ${escapeHtml(booking.vehicle_type_required)}</p>
+                ${booking.status === "picked_up" ? '<p class="muted">In transit will be set automatically once you leave the pickup area.</p>' : ""}
+                <div class="action-row">
+                    <button type="button" data-track-booking-id="${booking.id}">Track live</button>
+                    ${canAccept ? `<button type="button" data-booking-action="accept" data-booking-id="${booking.id}" data-vehicle-id="${vehicle.id}">Accept booking</button>` : ""}
+                    ${statusAction ? `<button type="button" data-progress-booking-id="${booking.id}" data-next-status="${statusAction.nextStatus}">${statusAction.label}</button>` : ""}
+                </div>
+                ${open && !canAccept ? '<p class="muted">Your current vehicle setup does not match this request, or the vehicle is busy.</p>' : ""}
+            </article>
+        `;
+    }
+
+    function renderBookings() {
+        const openList = document.getElementById("open-bookings");
+        const assignedList = document.getElementById("assigned-bookings");
+
+        openList.innerHTML = state.openBookings.length
+            ? state.openBookings.map((booking) => bookingCard(booking, {open: true})).join("")
+            : '<p class="muted">No matching open bookings right now.</p>';
+
+        assignedList.innerHTML = state.assignedBookings.length
+            ? state.assignedBookings.map((booking) => bookingCard(booking, {open: false})).join("")
+            : '<p class="muted">No accepted trips yet.</p>';
+
+        if (!getSelectedBooking()) {
+            const preferred = getActiveTrackingBooking() || state.openBookings[0] || null;
+            state.selectedBookingId = preferred ? preferred.id : null;
+        }
+        renderSelectedBooking();
+        renderMap();
+    }
+
+    async function loadSetup() {
+        state.setup = await apiRequest("/api/transporters/me/", {method: "GET"});
+        populateVehicleForm();
+    }
+
+    async function loadOpenBookings() {
+        state.openBookings = await apiRequest("/api/bookings/driver/open/", {method: "GET"});
+    }
+
+    async function loadAssignedBookings() {
+        const bookings = await apiRequest("/api/bookings/driver/assigned/", {method: "GET"});
+        state.assignedBookings = bookings.filter((booking) => booking.status !== "delivered");
+    }
+
+    async function refreshDashboard() {
+        await Promise.all([loadSetup(), loadOpenBookings(), loadAssignedBookings()]);
+        renderBookings();
+    }
+
+    async function refreshBookingQueues() {
+        await Promise.all([loadOpenBookings(), loadAssignedBookings()]);
+        renderBookings();
+    }
+
+    async function refreshSelectedBooking() {
+        const booking = getSelectedBooking();
+        if (!booking || !state.assignedBookings.some((item) => item.id === booking.id)) {
+            return;
+        }
+        const detail = await apiRequest(`/api/bookings/${booking.id}/tracking/`, {method: "GET"});
+        state.assignedBookings = state.assignedBookings.map((item) => item.id === detail.id ? detail : item);
+        renderSelectedBooking();
+        renderMap();
+    }
+
+    async function syncLiveLocation(coords) {
+        const locationMessage = document.getElementById("map-message");
+        if (state.syncInFlight) {
+            return;
+        }
+        state.syncInFlight = true;
+        state.latestCoords = {
+            latitude: Number(coords.latitude.toFixed(6)),
+            longitude: Number(coords.longitude.toFixed(6)),
+        };
+
+        try {
+            await apiRequest("/api/transporters/me/location/", {
+                method: "PATCH",
+                body: JSON.stringify({
+                    current_latitude: state.latestCoords.latitude,
+                    current_longitude: state.latestCoords.longitude,
+                }),
+            });
+
+            const activeBooking = getActiveTrackingBooking();
+            if (activeBooking) {
+                const bookingChanged = state.trackingBookingId !== activeBooking.id;
+                state.trackingBookingId = activeBooking.id;
+                const trackingPayload = {
+                    latitude: state.latestCoords.latitude,
+                    longitude: state.latestCoords.longitude,
+                    notes: bookingChanged ? "Automatic live location started for accepted trip" : "Automatic live location update",
+                };
+                if (coords.speed && coords.speed > 0) {
+                    trackingPayload.speed_kph = (coords.speed * 3.6).toFixed(2);
+                }
+                await apiRequest(`/api/bookings/${activeBooking.id}/tracking-updates/`, {
+                    method: "POST",
+                    body: JSON.stringify(trackingPayload),
+                });
+            } else {
+                state.trackingBookingId = null;
+            }
+
+            hideMessage(locationMessage);
+            await refreshBookingQueues();
+            renderMap();
+        } catch (error) {
+            showMessage(locationMessage, error.message || "Unable to sync live location.", true);
+        } finally {
+            state.syncInFlight = false;
+        }
+    }
+
+    function startLiveTracking() {
+        const locationMessage = document.getElementById("map-message");
+        if (!navigator.geolocation) {
+            showMessage(locationMessage, "Browser geolocation is not available.", true);
+            return;
+        }
+        if (state.watchId !== null) {
+            navigator.geolocation.clearWatch(state.watchId);
+        }
+        state.watchId = navigator.geolocation.watchPosition(
+            (position) => {
+                syncLiveLocation(position.coords);
+            },
+            (error) => {
+                showMessage(locationMessage, error.message || "Unable to read browser location.", true);
+            },
+            {enableHighAccuracy: true, maximumAge: 5000, timeout: 10000}
+        );
+        hideMessage(locationMessage);
+    }
+
+    document.getElementById("vehicle-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const message = document.getElementById("vehicle-message");
+        const payload = serializeForm(event.currentTarget);
+        const currentVehicle = getPrimaryVehicle();
+
+        try {
+            await apiRequest("/api/transporters/me/", {
+                method: "POST",
+                body: JSON.stringify({
+                    profile: {
+                        company_name: state.setup?.profile?.company_name || "",
+                        current_latitude: state.setup?.profile?.current_latitude,
+                        current_longitude: state.setup?.profile?.current_longitude,
+                    },
+                    vehicles: [
+                        {
+                            ...(currentVehicle ? {id: currentVehicle.id} : {}),
+                            registration_number: payload.registration_number,
+                            vehicle_type: payload.vehicle_type,
+                            capacity_kg: payload.capacity_kg,
+                            is_available: payload.is_available === "true",
+                        }
+                    ],
+                }),
+            });
+            showMessage(message, "Vehicle details updated.");
+            await refreshDashboard();
+        } catch (error) {
+            showMessage(message, error.message, true);
+        }
+    });
+
+    document.addEventListener("click", async (event) => {
+        const card = event.target.closest("[data-booking-id]");
+        if (card && !event.target.closest("button")) {
+            selectBooking(Number(card.dataset.bookingId));
+        }
+
+        const trackButton = event.target.closest("[data-track-booking-id]");
+        if (trackButton) {
+            selectBooking(Number(trackButton.dataset.trackBookingId));
+            return;
+        }
+
+        const decisionButton = event.target.closest("[data-booking-action='accept']");
+        if (decisionButton) {
+            const message = document.getElementById("map-message");
+            try {
+                const result = await apiRequest("/api/bookings/driver/decision/", {
+                    method: "POST",
+                    body: JSON.stringify({
+                        booking_id: Number(decisionButton.dataset.bookingId),
+                        vehicle_id: Number(decisionButton.dataset.vehicleId),
+                        action: "accept",
+                    }),
+                });
+                showMessage(message, `Booking #${result.id} accepted successfully.`);
+                await refreshDashboard();
+                selectBooking(result.id);
+            } catch (error) {
+                hideMessage(message);
+                showPopup(error.message, "Action needed");
+            }
+        }
+
+        const progressButton = event.target.closest("[data-progress-booking-id]");
+        if (progressButton) {
+            const message = document.getElementById("map-message");
+            const bookingId = Number(progressButton.dataset.progressBookingId);
+            const nextStatus = progressButton.dataset.nextStatus;
+            try {
+                const result = await apiRequest(`/api/bookings/${bookingId}/status/`, {
+                    method: "POST",
+                    body: JSON.stringify({status: nextStatus}),
+                });
+                showMessage(message, `Booking #${result.id} updated to ${formatStatus(result.status)}.`);
+                await refreshDashboard();
+                selectBooking(result.id);
+            } catch (error) {
+                hideMessage(message);
+                showPopup(error.message, "Action needed");
+            }
+        }
+    });
+
+    document.getElementById("reload-open-bookings").addEventListener("click", refreshDashboard);
+    document.getElementById("reload-assigned-bookings").addEventListener("click", refreshDashboard);
+    document.getElementById("driver-popup-close").addEventListener("click", hidePopup);
+    document.getElementById("driver-popup").addEventListener("click", (event) => {
+        if (event.target.id === "driver-popup") {
+            hidePopup();
+        }
+    });
+
+    refreshDashboard()
+        .then(() => {
+            startLiveTracking();
+            state.dashboardPollId = window.setInterval(async () => {
+                await refreshDashboard();
+                await refreshSelectedBooking();
+            }, 15000);
+        })
+        .catch((error) => {
+            showMessage(document.getElementById("map-message"), error.message, true);
+        });
+</script>
+{% endblock %}

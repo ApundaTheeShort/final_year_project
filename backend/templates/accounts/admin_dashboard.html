@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Dashboard{% endblock %}
+{% block page_class %}wide{% endblock %}
+{% block card_class %}dashboard{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <h1>System admin dashboard</h1>
+    <p>Review the active transport rates and the booking revenue picture without leaving the main application.</p>
+</div>
+
+{% if messages %}
+<div class="stack" style="margin-bottom: 1rem;">
+    {% for message in messages %}
+    <p class="message{% if message.tags == 'error' %} error{% endif %}">{{ message }}</p>
+    {% endfor %}
+</div>
+{% endif %}
+
+<div class="grid two">
+    <section class="panel details">
+        <h2>Admin account</h2>
+        <p><strong>Name:</strong> {{ user.first_name }} {{ user.last_name }}</p>
+        <p><strong>Phone number:</strong> {{ user.phone_number }}</p>
+        <p><strong>Email:</strong> {{ user.email }}</p>
+        <p><strong>Access:</strong> Staff dashboard</p>
+        <div class="links">
+            <a href="/admin/">Open Django admin</a>
+            <a href="{% url 'password_change' %}">Change password</a>
+        </div>
+        <form method="post" action="{% url 'logout' %}">
+            {% csrf_token %}
+            <button type="submit">Log out</button>
+        </form>
+    </section>
+
+    <section class="panel">
+        <h2>Revenue summary</h2>
+        <div class="card-list">
+            <article class="card-item">
+                <h3>Total bookings</h3>
+                <p><strong>{{ booking_summary.total_bookings }}</strong></p>
+            </article>
+            <article class="card-item">
+                <h3>Active bookings</h3>
+                <p><strong>{{ booking_summary.active_bookings }}</strong></p>
+            </article>
+            <article class="card-item">
+                <h3>Delivered bookings</h3>
+                <p><strong>{{ booking_summary.delivered_bookings }}</strong></p>
+            </article>
+            <article class="card-item">
+                <h3>Total quoted revenue</h3>
+                <p><strong>KES {{ booking_summary.total_revenue }}</strong></p>
+            </article>
+            <article class="card-item">
+                <h3>Active revenue</h3>
+                <p><strong>KES {{ booking_summary.active_revenue }}</strong></p>
+            </article>
+            <article class="card-item">
+                <h3>Delivered revenue</h3>
+                <p><strong>KES {{ booking_summary.delivered_revenue }}</strong></p>
+            </article>
+        </div>
+    </section>
+</div>
+
+<div class="grid two" style="margin-top: 1rem;">
+    <section class="panel">
+        <h2>Current transport rates</h2>
+        <form method="post" action="{% url 'admin-dashboard' %}" class="stack">
+            {% csrf_token %}
+            <div class="row">
+                <label>
+                    Motorbike rate per km
+                    {{ rate_form.motorbike }}
+                </label>
+                <label>
+                    Pickup rate per km
+                    {{ rate_form.pickup }}
+                </label>
+            </div>
+            <div class="row">
+                <label>
+                    Van rate per km
+                    {{ rate_form.van }}
+                </label>
+                <label>
+                    Truck rate per km
+                    {{ rate_form.truck }}
+                </label>
+            </div>
+            <button type="submit">Save transport rates</button>
+        </form>
+        <table style="margin-top: 1rem;">
+            <thead>
+                <tr>
+                    <th>Vehicle type</th>
+                    <th>Active rate per km</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rate in current_rates %}
+                <tr>
+                    <td>{{ rate.label }}</td>
+                    <td>KES {{ rate.price_per_km }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+
+    <section class="panel">
+        <h2>Revenue by vehicle type</h2>
+        {% if bookings_by_vehicle %}
+        <table>
+            <thead>
+                <tr>
+                    <th>Vehicle type</th>
+                    <th>Bookings</th>
+                    <th>Revenue</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for item in bookings_by_vehicle %}
+                <tr>
+                    <td>{{ item.vehicle_type_required|title }}</td>
+                    <td>{{ item.bookings }}</td>
+                    <td>KES {{ item.revenue }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="muted">No bookings have been created yet.</p>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

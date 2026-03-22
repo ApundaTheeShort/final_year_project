@@ -1,0 +1,819 @@
+{% extends "base.html" %}
+
+{% block title %}Farmer Dashboard{% endblock %}
+{% block page_class %}wide{% endblock %}
+{% block card_class %}dashboard{% endblock %}
+
+{% block extra_head %}
+<link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+    crossorigin=""
+>
+<style>
+    #booking-map {
+        min-height: 460px;
+        border-radius: 18px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+    }
+
+    #tracking-map {
+        min-height: 420px;
+        border-radius: 18px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+    }
+
+    .mode-switch {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+
+    .mode-switch button {
+        background: #fff;
+        color: var(--text);
+        border: 1px solid var(--border);
+    }
+
+    .mode-switch button.active {
+        background: var(--accent);
+        color: #fff;
+        border-color: var(--accent);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <h1>Farmer dispatch dashboard</h1>
+    <p>Pick pickup and delivery points directly on the map or by search, preview the route, and send the booking to nearby transporters.</p>
+</div>
+
+<div class="grid two">
+    <section class="panel details">
+        <h2>Your account</h2>
+        <p><strong>Name:</strong> {{ user.first_name }} {{ user.last_name }}</p>
+        <p><strong>Phone number:</strong> {{ user.phone_number }}</p>
+        <p><strong>Email:</strong> {{ user.email }}</p>
+        <p><strong>Role:</strong> {{ user.role|title }}</p>
+        <p><strong>Map APIs:</strong> `/api/maps/places/search/`, `/api/maps/places/reverse/`, `/api/maps/routes/preview/`</p>
+        <div class="links">
+            <a href="{% url 'password_change' %}">Change password</a>
+        </div>
+        <form method="post" action="{% url 'logout' %}">
+            {% csrf_token %}
+            <button type="submit">Log out</button>
+        </form>
+    </section>
+
+    <section class="panel">
+        <h2>Map booking flow</h2>
+        <div class="timeline">
+            <div class="timeline-item">
+                <strong>1. Choose selection mode</strong>
+                <p>Switch between pickup and delivery mode, then click on the map or select a search result.</p>
+            </div>
+            <div class="timeline-item">
+                <strong>2. Review route</strong>
+                <p>The route line is drawn on the map and the backend returns distance and duration.</p>
+            </div>
+            <div class="timeline-item">
+                <strong>3. Create booking</strong>
+                <p>The backend expands the transporter search automatically from the closest drivers outward until it finds matching vehicles.</p>
+            </div>
+        </div>
+    </section>
+</div>
+
+<div class="grid two" style="margin-top: 1rem;">
+    <section class="panel">
+        <h2>Interactive map</h2>
+        <div class="stack">
+            <div class="mode-switch">
+                <button type="button" id="pickup-mode" class="active">Select pickup</button>
+                <button type="button" id="dropoff-mode">Select delivery</button>
+            </div>
+            <div class="row actions">
+                <button type="button" id="pickup-current-location">Use my location for pickup</button>
+                <button type="button" id="dropoff-current-location">Use my location for delivery</button>
+            </div>
+            <div id="booking-map"></div>
+            <p id="map-message" class="message" hidden></p>
+        </div>
+    </section>
+
+    <section class="panel">
+        <h2>Search places</h2>
+        <div class="search-grid">
+            <div class="stack">
+                <h3>Pickup search</h3>
+                <div class="row actions">
+                    <input id="pickup-query" placeholder="Search pickup place">
+                    <button type="button" id="pickup-search">Search pickup</button>
+                </div>
+                <div id="pickup-results" class="search-results"></div>
+            </div>
+            <div class="stack">
+                <h3>Delivery search</h3>
+                <div class="row actions">
+                    <input id="dropoff-query" placeholder="Search delivery place">
+                    <button type="button" id="dropoff-search">Search delivery</button>
+                </div>
+                <div id="dropoff-results" class="search-results"></div>
+            </div>
+        </div>
+        <p id="search-message" class="message" hidden></p>
+    </section>
+</div>
+
+<div class="grid two" style="margin-top: 1rem;">
+    <section class="panel">
+        <h2>Selected places</h2>
+        <div class="stack">
+            <div id="pickup-selected" class="place-chip">
+                <h3>Pickup</h3>
+                <p class="muted">No pickup place selected yet.</p>
+            </div>
+            <div id="dropoff-selected" class="place-chip">
+                <h3>Delivery</h3>
+                <p class="muted">No delivery place selected yet.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="panel">
+        <h2>Route preview</h2>
+        <div id="route-preview" class="map-box">
+            <p class="muted">Select both places to preview route distance, duration, and map geometry.</p>
+        </div>
+    </section>
+</div>
+
+<section class="panel" style="margin-top: 1rem;">
+    <h2>Create booking</h2>
+    <form id="booking-form" class="stack">
+        <div class="row">
+            <label>
+                Produce name
+                <input name="produce_name" required>
+            </label>
+            <label>
+                Weight (kg)
+                <input name="weight_kg" type="number" step="0.01" min="0.01" required>
+            </label>
+        </div>
+        <label>
+            Produce description
+            <textarea name="produce_description"></textarea>
+        </label>
+        <button type="submit">Create booking from mapped places</button>
+    </form>
+    <p id="booking-message" class="message" hidden></p>
+</section>
+
+<section class="panel" style="margin-top: 1rem;">
+    <div class="row">
+        <h2>My bookings</h2>
+        <button type="button" id="reload-bookings">Refresh bookings</button>
+    </div>
+    <div id="booking-list" class="card-list"></div>
+</section>
+
+<section class="panel" style="margin-top: 1rem;">
+    <div class="row">
+        <h2>Live transport tracking</h2>
+        <button type="button" id="stop-tracking" hidden>Stop tracking</button>
+    </div>
+    <div class="grid two">
+        <div id="tracking-map"></div>
+        <div id="tracking-summary" class="stack">
+            <p class="muted">Click `Track live` on a booking to open its route and follow the transporter from pickup to destination.</p>
+        </div>
+    </div>
+    <p id="tracking-message" class="message" hidden></p>
+</section>
+
+<script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+    crossorigin=""
+></script>
+<script>
+    const csrfToken = document.cookie
+        .split("; ")
+        .find((row) => row.startsWith("csrftoken="))
+        ?.split("=")[1];
+
+    const state = {
+        mode: "pickup",
+        pickupPlace: null,
+        dropoffPlace: null,
+        routePreview: null,
+        pickupResults: [],
+        dropoffResults: [],
+        trackedBookingId: null,
+        trackingPollId: null,
+        trackedBooking: null,
+        bookingStatuses: {},
+        bookingsLoaded: false,
+        bookingsPollId: null,
+    };
+
+    const map = L.map("booking-map").setView([-1.286389, 36.817223], 11);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap contributors",
+    }).addTo(map);
+
+    let pickupMarker = null;
+    let dropoffMarker = null;
+    let routeLine = null;
+    const trackingMap = L.map("tracking-map").setView([-1.286389, 36.817223], 11);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap contributors",
+    }).addTo(trackingMap);
+
+    let trackingPickupMarker = null;
+    let trackingDropoffMarker = null;
+    let trackingRouteLine = null;
+    let trackingTrailLine = null;
+    let trackingDriverMarker = null;
+
+    async function apiRequest(url, options = {}) {
+        const response = await fetch(url, {
+            credentials: "same-origin",
+            headers: {
+                "Content-Type": "application/json",
+                "X-CSRFToken": csrfToken || "",
+                ...(options.headers || {}),
+            },
+            ...options,
+        });
+        const text = await response.text();
+        const data = text ? JSON.parse(text) : null;
+        if (!response.ok) {
+            throw new Error(JSON.stringify(data || {detail: "Request failed"}, null, 2));
+        }
+        return data;
+    }
+
+    function escapeHtml(value) {
+        return String(value ?? "")
+            .replaceAll("&", "&amp;")
+            .replaceAll("<", "&lt;")
+            .replaceAll(">", "&gt;")
+            .replaceAll('"', "&quot;")
+            .replaceAll("'", "&#39;");
+    }
+
+    function showMessage(element, message, isError = false) {
+        element.hidden = false;
+        element.textContent = message;
+        element.classList.toggle("error", isError);
+    }
+
+    function hideMessage(element) {
+        element.hidden = true;
+        element.textContent = "";
+        element.classList.remove("error");
+    }
+
+    function placeLatLng(place) {
+        return [Number(place.latitude), Number(place.longitude)];
+    }
+
+    function requestBrowserLocation() {
+        return new Promise((resolve, reject) => {
+            if (!navigator.geolocation) {
+                reject(new Error("Browser geolocation is not available."));
+                return;
+            }
+            navigator.geolocation.getCurrentPosition(
+                (position) => resolve(position.coords),
+                (error) => reject(error),
+                {enableHighAccuracy: true, timeout: 10000}
+            );
+        });
+    }
+
+    function renderModeButtons() {
+        document.getElementById("pickup-mode").classList.toggle("active", state.mode === "pickup");
+        document.getElementById("dropoff-mode").classList.toggle("active", state.mode === "dropoff");
+    }
+
+    function clearTrackingMap() {
+        if (trackingPickupMarker) {
+            trackingMap.removeLayer(trackingPickupMarker);
+            trackingPickupMarker = null;
+        }
+        if (trackingDropoffMarker) {
+            trackingMap.removeLayer(trackingDropoffMarker);
+            trackingDropoffMarker = null;
+        }
+        if (trackingRouteLine) {
+            trackingMap.removeLayer(trackingRouteLine);
+            trackingRouteLine = null;
+        }
+        if (trackingTrailLine) {
+            trackingMap.removeLayer(trackingTrailLine);
+            trackingTrailLine = null;
+        }
+        if (trackingDriverMarker) {
+            trackingMap.removeLayer(trackingDriverMarker);
+            trackingDriverMarker = null;
+        }
+    }
+
+    function renderTrackingSummary() {
+        const element = document.getElementById("tracking-summary");
+        const booking = state.trackedBooking;
+        const stopButton = document.getElementById("stop-tracking");
+        if (!booking) {
+            stopButton.hidden = true;
+            element.innerHTML = '<p class="muted">Click `Track live` on a booking to open its route and follow the transporter from pickup to destination.</p>';
+            clearTrackingMap();
+            trackingMap.setView([-1.286389, 36.817223], 11);
+            return;
+        }
+
+        stopButton.hidden = false;
+        const transporterName = booking.transporter_profile?.company_name || "Transporter assigned";
+        const trackingVisible = ["picked_up", "in_transit", "delivered"].includes(booking.status);
+        element.innerHTML = `
+            <div class="stack">
+                <div class="row">
+                    <h3>Booking #${escapeHtml(booking.id)}: ${escapeHtml(booking.produce_name)}</h3>
+                    <span class="status">${escapeHtml(booking.status)}</span>
+                </div>
+                <p class="meta">Transporter: ${escapeHtml(transporterName)}</p>
+                <p class="meta">Pickup: ${escapeHtml(booking.pickup_address)}</p>
+                <p class="meta">Dropoff: ${escapeHtml(booking.dropoff_address)}</p>
+                <p class="meta">Distance: ${escapeHtml(booking.estimated_distance_km || "N/A")} km</p>
+                <p class="meta">${trackingVisible ? "Live transport tracking is active on the map." : "Driver location becomes visible after pickup starts."}</p>
+                ${trackingVisible ? "" : '<p class="muted">Live driver tracking is hidden until the goods are picked up and transportation has started.</p>'}
+            </div>
+        `;
+    }
+
+    function maybeNotifyStatusChanges(bookings) {
+        const trackedStatuses = {};
+        for (const booking of bookings) {
+            trackedStatuses[booking.id] = booking.status;
+            const previousStatus = state.bookingStatuses[booking.id];
+            if (!state.bookingsLoaded || !previousStatus || previousStatus === booking.status) {
+                continue;
+            }
+            let message = null;
+            if (booking.status === "picked_up") {
+                message = `Booking #${booking.id}: your goods have been picked up.`;
+            } else if (booking.status === "in_transit") {
+                message = `Booking #${booking.id}: your goods are now in transit.`;
+            } else if (booking.status === "delivered") {
+                message = `Booking #${booking.id}: your goods have been delivered.`;
+            }
+            if (message) {
+                window.alert(message);
+                showMessage(document.getElementById("tracking-message"), message, false);
+            }
+        }
+        state.bookingStatuses = trackedStatuses;
+        state.bookingsLoaded = true;
+    }
+
+    function renderTrackingMap() {
+        clearTrackingMap();
+        const booking = state.trackedBooking;
+        if (!booking) {
+            return;
+        }
+        const trackingVisible = ["picked_up", "in_transit", "delivered"].includes(booking.status);
+
+        trackingPickupMarker = L.marker([Number(booking.pickup_latitude), Number(booking.pickup_longitude)]).addTo(trackingMap).bindPopup("Pickup");
+        trackingDropoffMarker = L.marker([Number(booking.dropoff_latitude), Number(booking.dropoff_longitude)]).addTo(trackingMap).bindPopup("Dropoff");
+
+        const plannedRoute = booking.route_geometry?.coordinates?.map((pair) => [pair[1], pair[0]]) || [
+            [Number(booking.pickup_latitude), Number(booking.pickup_longitude)],
+            [Number(booking.dropoff_latitude), Number(booking.dropoff_longitude)],
+        ];
+        trackingRouteLine = L.polyline(plannedRoute, {color: "#0f766e", weight: 5, opacity: 0.75}).addTo(trackingMap);
+
+        if (trackingVisible) {
+            const trackingPoints = (booking.tracking_updates || []).map((update) => [
+                Number(update.latitude),
+                Number(update.longitude),
+            ]);
+            if (trackingPoints.length) {
+                trackingTrailLine = L.polyline(trackingPoints, {color: "#f59e0b", weight: 4, opacity: 0.9}).addTo(trackingMap);
+                trackingDriverMarker = L.marker(trackingPoints[trackingPoints.length - 1]).addTo(trackingMap).bindPopup("Live transporter");
+            } else if (booking.transporter_profile?.current_latitude && booking.transporter_profile?.current_longitude) {
+                trackingDriverMarker = L.marker([
+                    Number(booking.transporter_profile.current_latitude),
+                    Number(booking.transporter_profile.current_longitude),
+                ]).addTo(trackingMap).bindPopup("Current transporter location");
+            }
+        }
+
+        const bounds = L.featureGroup(
+            [trackingPickupMarker, trackingDropoffMarker, trackingRouteLine, trackingTrailLine, trackingDriverMarker].filter(Boolean)
+        ).getBounds();
+        if (bounds.isValid()) {
+            trackingMap.fitBounds(bounds, {padding: [30, 30]});
+        }
+        window.setTimeout(() => trackingMap.invalidateSize(), 0);
+    }
+
+    async function refreshTrackedBooking() {
+        if (!state.trackedBookingId) {
+            return;
+        }
+        try {
+            state.trackedBooking = await apiRequest(`/api/bookings/${state.trackedBookingId}/tracking/`, {method: "GET"});
+            hideMessage(document.getElementById("tracking-message"));
+            renderTrackingSummary();
+            renderTrackingMap();
+        } catch (error) {
+            showMessage(document.getElementById("tracking-message"), error.message, true);
+        }
+    }
+
+    async function startTracking(bookingId) {
+        state.trackedBookingId = bookingId;
+        if (state.trackingPollId) {
+            window.clearInterval(state.trackingPollId);
+        }
+        await refreshTrackedBooking();
+        state.trackingPollId = window.setInterval(refreshTrackedBooking, 10000);
+    }
+
+    function stopTracking() {
+        if (state.trackingPollId) {
+            window.clearInterval(state.trackingPollId);
+            state.trackingPollId = null;
+        }
+        state.trackedBookingId = null;
+        state.trackedBooking = null;
+        hideMessage(document.getElementById("tracking-message"));
+        renderTrackingSummary();
+    }
+
+    function renderPlaceSummary(elementId, title, place) {
+        const element = document.getElementById(elementId);
+        if (!place) {
+            element.innerHTML = `<h3>${title}</h3><p class="muted">No ${title.toLowerCase()} selected yet.</p>`;
+            return;
+        }
+        element.innerHTML = `
+            <h3>${title}</h3>
+            <p><strong>${escapeHtml(place.name || place.address)}</strong></p>
+            <p class="muted">${escapeHtml(place.address)}</p>
+            <p class="muted">Lat: ${escapeHtml(place.latitude)} | Lng: ${escapeHtml(place.longitude)}</p>
+        `;
+    }
+
+    function renderResults(type) {
+        const results = state[type === "pickup" ? "pickupResults" : "dropoffResults"];
+        const selected = state[type === "pickup" ? "pickupPlace" : "dropoffPlace"];
+        const element = document.getElementById(`${type}-results`);
+
+        if (!results.length) {
+            element.innerHTML = '<p class="muted">No places loaded.</p>';
+            return;
+        }
+
+        element.innerHTML = results.map((place, index) => `
+            <button
+                type="button"
+                class="result-item ${selected && selected.place_id === place.place_id ? "selected" : ""}"
+                data-result-type="${type}"
+                data-result-index="${index}">
+                <strong>${escapeHtml(place.name || place.address)}</strong>
+                <span>${escapeHtml(place.address)}</span>
+                <small>Select on map</small>
+            </button>
+        `).join("");
+    }
+
+    function updateMarkers() {
+        if (pickupMarker) {
+            map.removeLayer(pickupMarker);
+            pickupMarker = null;
+        }
+        if (dropoffMarker) {
+            map.removeLayer(dropoffMarker);
+            dropoffMarker = null;
+        }
+
+        if (state.pickupPlace) {
+            pickupMarker = L.marker(placeLatLng(state.pickupPlace)).addTo(map).bindPopup("Pickup");
+        }
+        if (state.dropoffPlace) {
+            dropoffMarker = L.marker(placeLatLng(state.dropoffPlace)).addTo(map).bindPopup("Delivery");
+        }
+    }
+
+    function updateMapViewport() {
+        const points = [];
+        if (state.pickupPlace) {
+            points.push(placeLatLng(state.pickupPlace));
+        }
+        if (state.dropoffPlace) {
+            points.push(placeLatLng(state.dropoffPlace));
+        }
+        if (points.length === 1) {
+            map.flyTo(points[0], 14);
+        }
+        if (points.length === 2) {
+            map.fitBounds(points, {padding: [40, 40]});
+        }
+    }
+
+    function drawRouteGeometry() {
+        if (routeLine) {
+            map.removeLayer(routeLine);
+            routeLine = null;
+        }
+
+        if (!state.pickupPlace || !state.dropoffPlace) {
+            return;
+        }
+
+        let points;
+        if (state.routePreview?.geometry?.coordinates?.length) {
+            points = state.routePreview.geometry.coordinates.map((pair) => [pair[1], pair[0]]);
+        } else {
+            points = [placeLatLng(state.pickupPlace), placeLatLng(state.dropoffPlace)];
+        }
+        routeLine = L.polyline(points, {color: "#0f766e", weight: 5, opacity: 0.8}).addTo(map);
+    }
+
+    function resetBookingComposer() {
+        state.mode = "pickup";
+        state.pickupPlace = null;
+        state.dropoffPlace = null;
+        state.routePreview = null;
+        state.pickupResults = [];
+        state.dropoffResults = [];
+
+        renderModeButtons();
+        renderPlaceSummary("pickup-selected", "Pickup", null);
+        renderPlaceSummary("dropoff-selected", "Delivery", null);
+        renderResults("pickup");
+        renderResults("dropoff");
+        hideMessage(document.getElementById("map-message"));
+        hideMessage(document.getElementById("search-message"));
+        drawRouteGeometry();
+        updateMarkers();
+        renderRoutePreview();
+        map.setView([-1.286389, 36.817223], 11);
+        document.getElementById("pickup-query").value = "";
+        document.getElementById("dropoff-query").value = "";
+    }
+
+    function renderRoutePreview() {
+        const element = document.getElementById("route-preview");
+        if (!state.pickupPlace || !state.dropoffPlace) {
+            element.innerHTML = '<p class="muted">Select both places to preview route distance, duration, and map geometry.</p>';
+            return;
+        }
+        if (!state.routePreview) {
+            element.innerHTML = '<p class="muted">Loading route preview...</p>';
+            return;
+        }
+
+        const routePoints = state.routePreview.geometry?.coordinates?.length || 2;
+        element.innerHTML = `
+            <p><strong>Estimated distance:</strong> ${escapeHtml(state.routePreview.distance_km)} km</p>
+            <p><strong>Estimated duration:</strong> ${escapeHtml(state.routePreview.duration_minutes || "Unavailable")} minutes</p>
+            <p><strong>Geometry points:</strong> ${routePoints}</p>
+            <p class="muted">The displayed line comes from the backend route preview and is stored with the booking.</p>
+        `;
+    }
+
+    async function refreshRoutePreview() {
+        renderPlaceSummary("pickup-selected", "Pickup", state.pickupPlace);
+        renderPlaceSummary("dropoff-selected", "Delivery", state.dropoffPlace);
+        updateMarkers();
+
+        if (!state.pickupPlace || !state.dropoffPlace) {
+            state.routePreview = null;
+            drawRouteGeometry();
+            updateMapViewport();
+            renderRoutePreview();
+            return;
+        }
+
+        state.routePreview = null;
+        renderRoutePreview();
+        try {
+            state.routePreview = await apiRequest("/api/maps/routes/preview/", {
+                method: "POST",
+                body: JSON.stringify({
+                    pickup_place: state.pickupPlace,
+                    dropoff_place: state.dropoffPlace,
+                }),
+            });
+        } catch (error) {
+            showMessage(document.getElementById("map-message"), error.message, true);
+            return;
+        }
+
+        hideMessage(document.getElementById("map-message"));
+        drawRouteGeometry();
+        updateMapViewport();
+        renderRoutePreview();
+    }
+
+    async function selectPlace(type, place, shouldFly = true) {
+        state[type === "pickup" ? "pickupPlace" : "dropoffPlace"] = place;
+        renderResults("pickup");
+        renderResults("dropoff");
+        await refreshRoutePreview();
+        if (shouldFly) {
+            map.flyTo(placeLatLng(place), 14);
+        }
+    }
+
+    async function searchPlaces(type) {
+        const query = document.getElementById(`${type}-query`).value.trim();
+        const resultsKey = type === "pickup" ? "pickupResults" : "dropoffResults";
+        if (!query) {
+            showMessage(document.getElementById("search-message"), "Enter a place name before searching.", true);
+            return;
+        }
+
+        document.getElementById(`${type}-results`).innerHTML = '<p class="muted">Searching places...</p>';
+        try {
+            const data = await apiRequest(`/api/maps/places/search/?q=${encodeURIComponent(query)}`, {method: "GET"});
+            state[resultsKey] = data.results || [];
+            renderResults(type);
+            hideMessage(document.getElementById("search-message"));
+        } catch (error) {
+            showMessage(document.getElementById("search-message"), error.message, true);
+        }
+    }
+
+    async function selectFromMap(lat, lng) {
+        const message = document.getElementById("map-message");
+        showMessage(message, `Resolving ${state.mode} point from the map...`, false);
+        try {
+            const place = await apiRequest(
+                `/api/maps/places/reverse/?latitude=${encodeURIComponent(lat)}&longitude=${encodeURIComponent(lng)}`,
+                {method: "GET"}
+            );
+            await selectPlace(state.mode, place, false);
+            showMessage(message, `${state.mode === "pickup" ? "Pickup" : "Delivery"} selected from map.`, false);
+        } catch (error) {
+            showMessage(message, error.message, true);
+        }
+    }
+
+    async function selectCurrentLocation(type) {
+        const message = document.getElementById("map-message");
+        showMessage(message, `Reading browser GPS for ${type}...`, false);
+        try {
+            const coords = await requestBrowserLocation();
+            const previousMode = state.mode;
+            state.mode = type;
+            renderModeButtons();
+            await selectFromMap(coords.latitude, coords.longitude);
+            state.mode = previousMode;
+            renderModeButtons();
+        } catch (error) {
+            showMessage(message, error.message || "Unable to read browser location.", true);
+        }
+    }
+
+    function bookingCard(booking) {
+        const transporter = booking.transporter_profile?.company_name || "Awaiting assignment";
+        return `
+            <article class="card-item">
+                <div class="row">
+                    <h3>${escapeHtml(booking.produce_name)}</h3>
+                    <span class="status">${escapeHtml(booking.status)}</span>
+                </div>
+                <p class="meta">Weight: ${escapeHtml(booking.weight_kg)} kg</p>
+                <p class="meta">Pickup: ${escapeHtml(booking.pickup_place?.address || booking.pickup_address)}</p>
+                <p class="meta">Dropoff: ${escapeHtml(booking.dropoff_place?.address || booking.dropoff_address)}</p>
+                <p class="meta">Distance: ${escapeHtml(booking.estimated_distance_km || "N/A")} km</p>
+                <p class="meta">Duration: ${escapeHtml(booking.estimated_duration_minutes || "N/A")} minutes</p>
+                <p class="meta">Vehicle needed: ${escapeHtml(booking.vehicle_type_required)}</p>
+                <p class="meta">Assigned transporter: ${escapeHtml(transporter)}</p>
+                <p class="meta">Quoted price: ${escapeHtml(booking.quoted_price || "Pending")}</p>
+                ${booking.status === "pending" ? `<button type="button" data-delete-booking-id="${booking.id}">Delete booking</button>` : ""}
+                <button type="button" data-track-booking-id="${booking.id}">Track live</button>
+            </article>
+        `;
+    }
+
+    async function loadBookings() {
+        const list = document.getElementById("booking-list");
+        list.innerHTML = '<p class="muted">Loading bookings...</p>';
+        try {
+            const bookings = await apiRequest("/api/bookings/");
+            maybeNotifyStatusChanges(bookings);
+            if (!bookings.length) {
+                list.innerHTML = '<p class="muted">No bookings yet.</p>';
+                return;
+            }
+            list.innerHTML = bookings.map(bookingCard).join("");
+        } catch (error) {
+            list.innerHTML = `<p class="message error">${escapeHtml(error.message)}</p>`;
+        }
+    }
+
+    document.getElementById("pickup-mode").addEventListener("click", () => {
+        state.mode = "pickup";
+        renderModeButtons();
+    });
+
+    document.getElementById("dropoff-mode").addEventListener("click", () => {
+        state.mode = "dropoff";
+        renderModeButtons();
+    });
+
+    document.getElementById("pickup-search").addEventListener("click", () => searchPlaces("pickup"));
+    document.getElementById("dropoff-search").addEventListener("click", () => searchPlaces("dropoff"));
+    document.getElementById("pickup-current-location").addEventListener("click", () => selectCurrentLocation("pickup"));
+    document.getElementById("dropoff-current-location").addEventListener("click", () => selectCurrentLocation("dropoff"));
+
+    document.addEventListener("click", async (event) => {
+        const deleteButton = event.target.closest("[data-delete-booking-id]");
+        if (deleteButton) {
+            const bookingId = Number(deleteButton.dataset.deleteBookingId);
+            const message = document.getElementById("booking-message");
+            try {
+                await apiRequest(`/api/bookings/${bookingId}/`, {method: "DELETE"});
+                showMessage(message, `Booking #${bookingId} deleted. Create a new booking with the correct details.`, false);
+                await loadBookings();
+            } catch (error) {
+                showMessage(message, error.message, true);
+            }
+            return;
+        }
+
+        const trackButton = event.target.closest("[data-track-booking-id]");
+        if (trackButton) {
+            const bookingId = Number(trackButton.dataset.trackBookingId);
+            await startTracking(bookingId);
+            return;
+        }
+
+        const button = event.target.closest("[data-result-type]");
+        if (!button) {
+            return;
+        }
+        const type = button.dataset.resultType;
+        const index = Number(button.dataset.resultIndex);
+        const place = state[type === "pickup" ? "pickupResults" : "dropoffResults"][index];
+        if (place) {
+            await selectPlace(type, place, true);
+        }
+    });
+
+    map.on("click", async (event) => {
+        await selectFromMap(event.latlng.lat, event.latlng.lng);
+    });
+
+    document.getElementById("booking-form").addEventListener("submit", async (event) => {
+        event.preventDefault();
+        const form = event.currentTarget;
+        const message = document.getElementById("booking-message");
+        if (!state.pickupPlace || !state.dropoffPlace) {
+            showMessage(message, "Select both pickup and delivery points on the map or from search before creating a booking.", true);
+            return;
+        }
+
+        const payload = Object.fromEntries(new FormData(form).entries());
+        payload.pickup_place = state.pickupPlace;
+        payload.dropoff_place = state.dropoffPlace;
+
+        try {
+            const booking = await apiRequest("/api/bookings/", {
+                method: "POST",
+                body: JSON.stringify(payload),
+            });
+            form.reset();
+            resetBookingComposer();
+            showMessage(message, `Booking #${booking.id} created from the mapped route.`, false);
+            await loadBookings();
+        } catch (error) {
+            showMessage(message, error.message, true);
+        }
+    });
+
+    document.getElementById("reload-bookings").addEventListener("click", loadBookings);
+    document.getElementById("stop-tracking").addEventListener("click", stopTracking);
+
+    renderModeButtons();
+    renderPlaceSummary("pickup-selected", "Pickup", null);
+    renderPlaceSummary("dropoff-selected", "Delivery", null);
+    renderRoutePreview();
+    renderTrackingSummary();
+    loadBookings();
+    state.bookingsPollId = window.setInterval(loadBookings, 10000);
+</script>
+{% endblock %}

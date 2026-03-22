@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block title %}My Account{% endblock %}
+
+{% block content %}
+<h1>Welcome, {{ user.first_name }}</h1>
+<p>Your account is active for the produce transport platform. Farmers create map-based bookings and transporters manage vehicle availability and live tracking.</p>
+
+<div class="details">
+    <p><strong>Phone number:</strong> {{ user.phone_number }}</p>
+    <p><strong>Email:</strong> {{ user.email }}</p>
+    <p><strong>First name:</strong> {{ user.first_name }}</p>
+    <p><strong>Last name:</strong> {{ user.last_name }}</p>
+    <p><strong>Role:</strong> {{ user.role|title }}</p>
+    <p><strong>Date joined:</strong> {{ user.date_joined }}</p>
+</div>
+
+<div class="links">
+    <a href="{% url 'password_change' %}">Change password</a>
+</div>
+
+<form method="post" action="{% url 'logout' %}">
+    {% csrf_token %}
+    <button type="submit">Log out</button>
+</form>
+{% endblock %}

@@ -1,26 +1,41 @@
 {% extends "base.html" %}
 
-{% block title %}My Account{% endblock %}
+{% block title %}My Profile | FreshHaul{% endblock %}
 
 {% block content %}
-<h1>Welcome, {{ user.first_name }}</h1>
-<p>Your account is active for the produce transport platform. Farmers create map-based bookings and transporters manage vehicle availability and live tracking.</p>
+<div class="panel" style="max-width: 600px; margin: 0 auto; text-align: center;">
+    <div style="width: 80px; height: 80px; background: rgba(16, 185, 129, 0.1); color: var(--accent-dark); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; margin: 0 auto 1.5rem auto; font-weight: 700;">
+        {{ user.first_name|default:user.username|make_list|first|upper }}
+    </div>
 
-<div class="details">
-    <p><strong>Phone number:</strong> {{ user.phone_number }}</p>
-    <p><strong>Email:</strong> {{ user.email }}</p>
-    <p><strong>First name:</strong> {{ user.first_name }}</p>
-    <p><strong>Last name:</strong> {{ user.last_name }}</p>
-    <p><strong>Role:</strong> {{ user.role|title }}</p>
-    <p><strong>Date joined:</strong> {{ user.date_joined }}</p>
+    <h1>Welcome, {{ user.first_name|default:user.username }}</h1>
+    <p>We're glad to have you on the FreshHaul produce transport platform.</p>
+
+    <div style="background: rgba(255,255,255,0.8); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 1.5rem; margin: 2rem 0; text-align: left;">
+        <div style="display: flex; justify-content: space-between; padding: 0.75rem 0; border-bottom: 1px solid var(--border);">
+            <strong style="color: var(--muted);">Phone number</strong>
+            <span>{{ user.phone_number }}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 0.75rem 0; border-bottom: 1px solid var(--border);">
+            <strong style="color: var(--muted);">Email</strong>
+            <span>{{ user.email|default:"Not provided" }}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 0.75rem 0; border-bottom: 1px solid var(--border);">
+            <strong style="color: var(--muted);">Account Role</strong>
+            <span class="status-badge" style="background: var(--accent); color: white;">{{ user.role|title|default:"User" }}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; padding: 0.75rem 0;">
+            <strong style="color: var(--muted);">Date joined</strong>
+            <span>{{ user.date_joined|date:"M d, Y" }}</span>
+        </div>
+    </div>
+
+    <div class="row" style="justify-content: center; gap: 1rem;">
+        <a href="{% url 'password_change' %}" class="btn btn-outline" style="min-width: 150px;">Change Password</a>
+        <form method="post" action="{% url 'logout' %}" style="margin: 0;">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger" style="min-width: 150px;">Log Out</button>
+        </form>
+    </div>
 </div>
-
-<div class="links">
-    <a href="{% url 'password_change' %}">Change password</a>
-</div>
-
-<form method="post" action="{% url 'logout' %}">
-    {% csrf_token %}
-    <button type="submit">Log out</button>
-</form>
 {% endblock %}

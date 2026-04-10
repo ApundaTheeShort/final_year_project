@@ -24,6 +24,11 @@ def env_bool(name, default=False):
         return default
     return value.strip().lower() in {"1", "true", "yes", "on"}
 
+
+def env_list(name, default=""):
+    raw_value = os.getenv(name, default)
+    return [item.strip() for item in raw_value.split(",") if item.strip()]
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -39,8 +44,17 @@ if not SECRET_KEY:
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env_bool('DEBUG')
 
-ALLOWED_HOSTS = [host for host in os.getenv('ALLOWED_HOSTS', '').split(',') if host]
-# if os.getenv('ALLOWED_HOSTS') else []
+# Restrict the hostnames Django will serve. Local defaults are only for development.
+ALLOWED_HOSTS = env_list('ALLOWED_HOSTS', '127.0.0.1,localhost' if DEBUG else '')
+# Required when the site is reached over HTTPS from real domains behind a proxy/load balancer.
+CSRF_TRUSTED_ORIGINS = env_list('CSRF_TRUSTED_ORIGINS')
+
+# Secure cookies should be on in production so session and CSRF cookies only travel over HTTPS.
+USE_SECURE_COOKIES = env_bool('USE_SECURE_COOKIES', not DEBUG)
+# Keep SSL redirect explicit so local HTTP development and tests are not forced into redirects.
+ENABLE_SSL_REDIRECT = env_bool('SECURE_SSL_REDIRECT', False)
+# HSTS should only be enabled after HTTPS is working correctly for the deployed domain.
+ENABLE_HSTS = env_bool('ENABLE_HSTS', False)
 
 
 # Application definition
@@ -154,12 +168,21 @@ STATIC_URL = 'static/'
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
+        # Session auth fits this same-origin Django app and keeps CSRF protection active.
         'rest_framework.authentication.SessionAuthentication',
-        'rest_framework.authentication.BasicAuthentication',
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
     ),
+    'DEFAULT_THROTTLE_CLASSES': (
+        # Basic API abuse protection for anonymous and signed-in traffic.
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': os.getenv('DRF_THROTTLE_ANON', '60/minute'),
+        'user': os.getenv('DRF_THROTTLE_USER', '300/minute'),
+    },
 }
 
 MAPS_USER_AGENT = os.getenv('MAPS_USER_AGENT', 'final-year-project-backend/1.0')
@@ -189,3 +212,26 @@ elif EMAIL_HOST:
 else:
     # Safe fallback for local/dev containers without an SMTP service.
     EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# Mark auth-related cookies as HTTPS-only in production.
+SESSION_COOKIE_SECURE = USE_SECURE_COOKIES
+CSRF_COOKIE_SECURE = USE_SECURE_COOKIES
+# Session cookies stay inaccessible to JavaScript to reduce session theft via XSS.
+SESSION_COOKIE_HTTPONLY = True
+# SameSite=Lax blocks most cross-site request usage while preserving normal navigation.
+SESSION_COOKIE_SAMESITE = os.getenv('SESSION_COOKIE_SAMESITE', 'Lax')
+CSRF_COOKIE_SAMESITE = os.getenv('CSRF_COOKIE_SAMESITE', 'Lax')
+# Redirect plain HTTP to HTTPS only when explicitly enabled for deployed environments.
+SECURE_SSL_REDIRECT = ENABLE_SSL_REDIRECT
+# Trust the proxy header when the app is behind Nginx/Traefik/Render-style TLS termination.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+# HSTS tells browsers to keep using HTTPS after the first secure visit.
+SECURE_HSTS_SECONDS = int(os.getenv('SECURE_HSTS_SECONDS', '31536000' if ENABLE_HSTS else '0'))
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_bool('SECURE_HSTS_INCLUDE_SUBDOMAINS', ENABLE_HSTS)
+SECURE_HSTS_PRELOAD = env_bool('SECURE_HSTS_PRELOAD', False)
+# Prevent MIME sniffing and clickjacking for dashboard pages.
+SECURE_CONTENT_TYPE_NOSNIFF = True
+X_FRAME_OPTIONS = 'DENY'
+# Reduce referrer leakage and isolate browsing contexts by default.
+SECURE_REFERRER_POLICY = os.getenv('SECURE_REFERRER_POLICY', 'same-origin')
+SECURE_CROSS_ORIGIN_OPENER_POLICY = os.getenv('SECURE_CROSS_ORIGIN_OPENER_POLICY', 'same-origin')

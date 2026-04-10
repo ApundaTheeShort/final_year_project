@@ -12,12 +12,21 @@ Most API routes are under:
 
 ## Authentication
 
-The project currently uses Django session authentication.
+The project uses Django session authentication.
 
 - Web login: `/accounts/login/`
 - API auth: session-based after login
+- Public signup: `/accounts/signup/`
+- Email verification notice: `/accounts/verification-sent/`
+- Email verification confirm: `/accounts/verify-email/<uidb64>/<token>/`
+- Resend verification: `/accounts/resend-verification/`
 
-Most API endpoints require an authenticated user.
+Notes:
+
+- Non-staff users must verify their email before they can sign in.
+- Changing the account email triggers a new verification email.
+- `BasicAuthentication` and token auth are not used by default.
+- Most API endpoints require an authenticated user and are throttled by DRF.
 
 ## Roles
 
@@ -44,6 +53,7 @@ Most API endpoints require an authenticated user.
 - Drivers can mark `picked_up` only after arriving at pickup.
 - Drivers can mark `delivered` only after arriving at dropoff.
 - `in_transit` is set automatically after the driver leaves pickup with the goods.
+- Farmers and drivers see technical tracking data hidden in the UI even though tracking endpoints still return operational data.
 
 ## Booking Status Values
 
@@ -235,16 +245,6 @@ Successful response:
 
 - `204 No Content`
 
-### Get Nearby Transporters For Booking
-
-`GET /api/bookings/<booking_id>/nearby-transporters/`
-
-Role:
-
-- `farmer`
-
-Returns system-matched transporters for the farmer's booking.
-
 ### Get Booking Tracking Detail
 
 `GET /api/bookings/<booking_id>/tracking/`
@@ -354,6 +354,8 @@ Returns pending bookings that match:
 - vehicle capacity
 - available vehicle
 - location-based discovery
+
+If the driver has not granted location yet, matching may be limited until live location is available.
 
 ### List Assigned Bookings For Driver
 
@@ -553,6 +555,7 @@ Notes:
 
 - Transport pricing is not driver-controlled.
 - Pricing is set by admin by vehicle type.
+- The dashboard uses this endpoint for the vehicle profile modal.
 
 ### Update Driver Live Location
 
@@ -583,6 +586,38 @@ Pricing is managed through:
 - in-app admin dashboard
 - Django admin `TransportPricing`
 
+## Email Verification And Password Reset
+
+### Signup
+
+`POST /accounts/signup/`
+
+Creates a `farmer` or `driver` account and sends an email verification link.
+
+### Verify Email
+
+`GET /accounts/verify-email/<uidb64>/<token>/`
+
+Marks the account email as verified when the token is valid.
+
+### Resend Verification
+
+`GET /accounts/resend-verification/`
+`POST /accounts/resend-verification/`
+
+Accepts an email address and sends a fresh verification link if the account exists and is not yet verified.
+
+### Password Reset
+
+Password reset uses Django’s standard account routes:
+
+- `/accounts/password_reset/`
+- `/accounts/password_reset/done/`
+- `/accounts/reset/<uidb64>/<token>/`
+- `/accounts/reset/done/`
+
+Real delivery depends on SMTP configuration, typically Brevo in this project.
+
 ## Troubleshooting
 
 ### Driver Cannot See Open Bookings
@@ -611,6 +646,15 @@ Check:
 - booking has been accepted
 - pickup has started
 - driver browser location sharing is active
+
+### Verification Email Does Not Arrive
+
+Check:
+
+- SMTP env vars are present
+- `DEFAULT_FROM_EMAIL` is a verified Brevo sender/domain
+- Brevo transactional logs show delivery activity
+- you are opening the app from `localhost` or a real HTTPS origin rather than `0.0.0.0`
 
 ## Error Response Examples
 

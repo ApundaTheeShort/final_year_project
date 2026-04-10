@@ -5,7 +5,7 @@
 
 This document defines the software architecture for the **Web-Based Farm Produce Transport Linking System**, a final year project designed to connect farmers with transporters for efficient movement of farm produce.
 
-The system enables farmers to create delivery requests, search for nearby transport providers, make bookings, track delivery progress, and review services after completion. Transporters can manage their availability, accept or decline bookings, update delivery status, and build trust through performance and ratings.
+The implemented system enables farmers to create map-based delivery requests, track delivery progress, and manage pending bookings. Transporters maintain vehicle details, accept matching jobs, share live location from the browser, and update delivery progress. Staff users manage transport pricing and booking oversight from an in-app dashboard.
 
 The architecture is designed to be:
 - modular
@@ -25,6 +25,7 @@ The main goals of the architecture are:
 - Support clear separation of concerns between frontend, backend, and database
 - Allow secure user authentication and role-based access
 - Support location-aware search and booking workflows
+- Support email verification and password reset through SMTP delivery
 - Make the system easy to maintain and extend
 - Ensure the system performs well on mobile and low-resource devices
 
@@ -38,7 +39,7 @@ The system follows a **client-server architecture** with a **layered design**.
 1. **Presentation Layer** – frontend user interface
 2. **Application Layer** – backend business logic and APIs
 3. **Data Layer** – relational database and persistent storage
-4. **Integration Layer** – external services like maps, SMS, and notifications
+4. **Integration Layer** – external services like maps and email delivery
 
 This approach makes the system easier to test, maintain, and expand.
 
@@ -52,17 +53,16 @@ This approach makes the system easier to test, maintain, and expand.
 - **Administrator**
 
 ### External Services
-- Mapping service (OpenStreetMap, Mapbox, or Google Maps)
-- Optional SMS/OTP notification service
-- Optional email service
-- Optional hosting/deployment infrastructure
+- Mapping service stack: OpenStreetMap tiles, Nominatim, OSRM
+- SMTP email delivery provider such as Brevo
+- Hosting/deployment infrastructure
 
 ### Core Business Interaction
 - Farmers create transport requests
-- System matches or helps farmers find suitable transporters
-- Transporters accept or reject requests
+- System calculates route, quote, and matching transporters
+- Transporters accept matching requests
 - Deliveries move through controlled status stages
-- Farmers rate transporters after successful delivery
+- Farmers track accepted deliveries live from the dashboard
 
 ---
 
@@ -71,7 +71,8 @@ This approach makes the system easier to test, maintain, and expand.
 ```text
 +------------------------+
 |   Web Frontend Client  |
-| (React / HTML / JS)    |
+|   Django Templates     |
+|   HTML / JS / Leaflet  |
 +-----------+------------+
             |
             | HTTPS / REST API
@@ -87,8 +88,12 @@ This approach makes the system easier to test, maintain, and expand.
 |     PostgreSQL DB      |
 +------------------------+
 
-Optional Integrations:
-- Maps API
-- SMS/OTP Service
-- Email Notification Service
+Active Integrations:
+- OpenStreetMap tile service
+- Nominatim geocoding
+- OSRM route service
+- SMTP transactional email provider
+
+Optional Future Integrations:
+- Native mobile tracking client
 - Redis/Celery for async jobs

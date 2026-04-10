@@ -135,6 +135,9 @@
         </div>
         <div class="stack">
             <section class="panel" style="padding: 1rem;">
+                <div style="display: flex; justify-content: flex-end; margin-bottom: 0.75rem;">
+                    <button type="button" class="btn btn-outline" id="recenter-dispatch-map" style="padding: 0.5rem 1rem;">Recenter Map</button>
+                </div>
                 <div id="dispatch-map" style="min-height: 480px; height: 100%; border-radius: var(--radius-md); box-shadow: inset 0 0 0 1px var(--border);"></div>
                 <p id="map-message" class="message" style="margin-top: 1rem;" hidden></p>
             </section>
@@ -201,6 +204,10 @@
             <p style="margin: 0;"><strong>Email:</strong> {{ user.email }}</p>
             <p style="margin: 0;"><strong>Role:</strong> Transporter</p>
         </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 1rem;">
+            <button type="button" class="btn btn-outline" id="open-profile-modal">Update Profile</button>
+        </div>
         
         <div style="display: flex; gap: 1rem; margin-top: 2rem; flex-wrap: wrap;">
             <a href="{% url 'password_change' %}" class="btn btn-outline" style="flex: 1; text-align: center; padding: 1rem;">Change Password</a>
@@ -217,6 +224,36 @@
         <h3 id="driver-popup-title" style="font-size: 1.5rem; margin-bottom: 1rem;">Notice</h3>
         <p id="driver-popup-body" style="color: var(--muted); line-height: 1.6; margin-bottom: 1.5rem;"></p>
         <button type="button" class="btn" id="driver-popup-close" style="width: 100%;">Okay</button>
+    </div>
+</div>
+
+<div id="profile-modal" class="modal-backdrop" hidden>
+    <div class="modal-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3 style="margin: 0;">Update Profile</h3>
+            <button type="button" class="btn btn-outline" id="close-profile-modal">Close</button>
+        </div>
+        <form method="post" action="{% url 'profile-update' %}" class="stack">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.path }}">
+            <div class="grid grid-2" style="gap: 1rem;">
+                <label>First Name
+                    {{ profile_form.first_name }}
+                </label>
+                <label>Last Name
+                    {{ profile_form.last_name }}
+                </label>
+                <label>Phone Number
+                    {{ profile_form.phone_number }}
+                </label>
+                <label>Email Address
+                    {{ profile_form.email }}
+                </label>
+            </div>
+            <div style="display: flex; justify-content: flex-end;">
+                <button type="submit" class="btn">Save Account Changes</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -241,19 +278,28 @@
         syncInFlight: false,
         trackingBookingId: null,
         dashboardPollId: null,
+        mapRenderTimer: null,
     };
 
-    const map = L.map("dispatch-map").setView([-1.286389, 36.817223], 11);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: "&copy; OpenStreetMap contributors",
-    }).addTo(map);
+    let map = null;
 
     let pickupMarker = null;
     let dropoffMarker = null;
     let driverMarker = null;
     let routeLine = null;
     let trackingLine = null;
+
+    function ensureDispatchMap() {
+        if (map) {
+            return map;
+        }
+        map = L.map("dispatch-map", {preferCanvas: true}).setView([-1.286389, 36.817223], 11);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 19,
+            attribution: "&copy; OpenStreetMap contributors",
+        }).addTo(map);
+        return map;
+    }
 
     async function apiRequest(url, options = {}) {
         const response = await fetch(url, {
@@ -292,13 +338,113 @@
 
         for (const value of Object.values(payload)) {
             if (Array.isArray(value) && value.length) {
-                return value[0];
+                if (typeof value[0] === "string") {
+                    return value[0];
+                }
+                return extractErrorMessage(value[0]);
             }
             if (typeof value === "string" && value) {
                 return value;
             }
+            if (value && typeof value === "object") {
+                return extractErrorMessage(value);
+            }
         }
         return "Request failed.";
+    }
+
+    function safeLatLng(latitude, longitude) {
+        const lat = Number(latitude);
+        const lng = Number(longitude);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+            return null;
+        }
+        return [lat, lng];
+    }
+
+    function toLeafletLatLngs(points) {
+        if (!Array.isArray(points)) {
+            return [];
+        }
+        return points
+            .filter((point) => Array.isArray(point) && point.length >= 2)
+            .map((point) => safeLatLng(point[0], point[1]))
+            .filter(Boolean)
+            .map((point) => L.latLng(point[0], point[1]));
+    }
+
+    function addSafePolyline(targetMap, points, options) {
+        const latLngs = toLeafletLatLngs(points);
+        if (latLngs.length < 2) {
+            return null;
+        }
+        try {
+            const size = targetMap.getSize();
+            if (!size || size.x <= 0 || size.y <= 0) {
+                return null;
+            }
+            return L.polyline(latLngs, options).addTo(targetMap);
+        } catch (error) {
+            console.error("Unable to add polyline", error);
+            return null;
+        }
+    }
+
+    function fitMapToLayers(targetMap, layers, padding = [30, 30]) {
+        const size = targetMap.getSize();
+        if (!size || size.x <= 0 || size.y <= 0) {
+            return;
+        }
+
+        const bounds = L.latLngBounds([]);
+        for (const layer of layers.filter(Boolean)) {
+            try {
+                if (typeof layer.getLatLng === "function") {
+                    const latLng = layer.getLatLng();
+                    if (latLng) {
+                        bounds.extend(latLng);
+                    }
+                    continue;
+                }
+                if (typeof layer.getLatLngs === "function") {
+                    const stack = [...layer.getLatLngs().flat(Infinity)];
+                    for (const latLng of stack) {
+                        if (latLng && Number.isFinite(latLng.lat) && Number.isFinite(latLng.lng)) {
+                            bounds.extend(latLng);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error("Unable to inspect map layer for bounds", error);
+            }
+        }
+
+        if (bounds.isValid()) {
+            try {
+                targetMap.fitBounds(bounds, {padding});
+            } catch (error) {
+                console.error("Unable to fit map bounds", error);
+            }
+        }
+    }
+
+    function sanitizeRouteCoordinates(coordinates) {
+        if (!Array.isArray(coordinates)) {
+            return [];
+        }
+        return coordinates
+            .filter((pair) => Array.isArray(pair) && pair.length >= 2)
+            .map((pair) => safeLatLng(pair[1], pair[0]))
+            .filter(Boolean);
+    }
+
+    function sanitizeTrackingCoordinates(updates) {
+        if (!Array.isArray(updates)) {
+            return [];
+        }
+        return updates
+            .map((update) => safeLatLng(update.latitude, update.longitude))
+            .filter(Boolean);
     }
 
     function escapeHtml(value) {
@@ -350,6 +496,35 @@
         return state.assignedBookings.find((booking) =>
             ["accepted", "picked_up", "in_transit"].includes(booking.status)
         ) || null;
+    }
+
+    async function ensureDefaultDispatchAvailability() {
+        const vehicle = getPrimaryVehicle();
+        if (!vehicle || vehicle.is_available || getActiveTrackingBooking()) {
+            return;
+        }
+
+        await apiRequest("/api/transporters/me/", {
+            method: "POST",
+            body: JSON.stringify({
+                profile: {
+                    company_name: state.setup?.profile?.company_name || "",
+                    current_latitude: state.setup?.profile?.current_latitude,
+                    current_longitude: state.setup?.profile?.current_longitude,
+                },
+                vehicles: [
+                    {
+                        id: vehicle.id,
+                        registration_number: vehicle.registration_number,
+                        vehicle_type: vehicle.vehicle_type,
+                        capacity_kg: vehicle.capacity_kg,
+                        is_available: true,
+                    }
+                ],
+            }),
+        });
+        state.setup = await apiRequest("/api/transporters/me/", {method: "GET"});
+        populateVehicleForm();
     }
 
     function formatStatus(status) {
@@ -411,6 +586,9 @@
     }
 
     function clearMapLayers() {
+        if (!map) {
+            return;
+        }
         if (pickupMarker) {
             map.removeLayer(pickupMarker);
             pickupMarker = null;
@@ -434,54 +612,77 @@
     }
 
     function renderMap() {
+        const dispatchMap = ensureDispatchMap();
         clearMapLayers();
         const booking = getSelectedBooking();
         if (!booking) {
-            if (state.latestCoords) {
-                driverMarker = L.marker([state.latestCoords.latitude, state.latestCoords.longitude]).addTo(map).bindPopup("Your live location");
-                map.setView([state.latestCoords.latitude, state.latestCoords.longitude], 13);
+            const livePoint = safeLatLng(state.latestCoords?.latitude, state.latestCoords?.longitude);
+            if (livePoint) {
+                driverMarker = L.marker(livePoint).addTo(dispatchMap).bindPopup("Your live location");
+                dispatchMap.setView(livePoint, 13);
             }
             return;
         }
 
-        pickupMarker = L.marker([Number(booking.pickup_latitude), Number(booking.pickup_longitude)])
-            .addTo(map)
-            .bindPopup("Pickup");
-        dropoffMarker = L.marker([Number(booking.dropoff_latitude), Number(booking.dropoff_longitude)])
-            .addTo(map)
-            .bindPopup("Dropoff");
+        const pickupPoint = safeLatLng(booking.pickup_latitude, booking.pickup_longitude);
+        const dropoffPoint = safeLatLng(booking.dropoff_latitude, booking.dropoff_longitude);
+        if (pickupPoint) {
+            pickupMarker = L.marker(L.latLng(pickupPoint[0], pickupPoint[1])).addTo(dispatchMap).bindPopup("Pickup");
+        }
+        if (dropoffPoint) {
+            dropoffMarker = L.marker(L.latLng(dropoffPoint[0], dropoffPoint[1])).addTo(dispatchMap).bindPopup("Dropoff");
+        }
 
-        const routeCoordinates = booking.route_geometry?.coordinates?.map((pair) => [pair[1], pair[0]]) || [
-            [Number(booking.pickup_latitude), Number(booking.pickup_longitude)],
-            [Number(booking.dropoff_latitude), Number(booking.dropoff_longitude)],
-        ];
-        routeLine = L.polyline(routeCoordinates, {color: "#0f766e", weight: 5, opacity: 0.85}).addTo(map);
+        let routeCoordinates = sanitizeRouteCoordinates(booking.route_geometry?.coordinates);
+        if (routeCoordinates.length < 2) {
+            routeCoordinates = [pickupPoint, dropoffPoint].filter(Boolean);
+        }
+        routeLine = addSafePolyline(dispatchMap, routeCoordinates, {color: "#0f766e", weight: 5, opacity: 0.85});
 
-        const trackingCoordinates = (booking.tracking_updates || []).map((update) => [
-            Number(update.latitude),
-            Number(update.longitude),
-        ]);
-        if (trackingCoordinates.length) {
-            trackingLine = L.polyline(trackingCoordinates, {color: "#f59e0b", weight: 4, opacity: 0.9}).addTo(map);
+        const trackingCoordinates = sanitizeTrackingCoordinates(booking.tracking_updates);
+        if (trackingCoordinates.length >= 2) {
+            trackingLine = addSafePolyline(dispatchMap, trackingCoordinates, {color: "#f59e0b", weight: 4, opacity: 0.9});
             const lastPoint = trackingCoordinates[trackingCoordinates.length - 1];
-            driverMarker = L.marker(lastPoint).addTo(map).bindPopup("Live transporter location");
-        } else if (state.latestCoords) {
-            driverMarker = L.marker([state.latestCoords.latitude, state.latestCoords.longitude]).addTo(map).bindPopup("Live transporter location");
+            driverMarker = L.marker(L.latLng(lastPoint[0], lastPoint[1])).addTo(dispatchMap).bindPopup("Live transporter location");
+        } else if (trackingCoordinates.length === 1) {
+            driverMarker = L.marker(L.latLng(trackingCoordinates[0][0], trackingCoordinates[0][1])).addTo(dispatchMap).bindPopup("Live transporter location");
+        } else {
+            const livePoint = safeLatLng(state.latestCoords?.latitude, state.latestCoords?.longitude);
+            if (livePoint) {
+                driverMarker = L.marker(L.latLng(livePoint[0], livePoint[1])).addTo(dispatchMap).bindPopup("Live transporter location");
+            }
         }
 
-        const bounds = L.featureGroup(
-            [pickupMarker, dropoffMarker, routeLine, trackingLine, driverMarker].filter(Boolean)
-        ).getBounds();
-        if (bounds.isValid()) {
-            map.fitBounds(bounds, {padding: [30, 30]});
+        fitMapToLayers(dispatchMap, [pickupMarker, dropoffMarker, routeLine, trackingLine, driverMarker], [30, 30]);
+    }
+
+    function recenterDispatchMap() {
+        const dispatchMap = ensureDispatchMap();
+        fitMapToLayers(dispatchMap, [pickupMarker, dropoffMarker, routeLine, trackingLine, driverMarker], [30, 30]);
+    }
+
+    function scheduleDispatchMapRender() {
+        if (state.mapRenderTimer) {
+            window.clearTimeout(state.mapRenderTimer);
         }
+        state.mapRenderTimer = window.setTimeout(() => {
+            try {
+                const dispatchMap = ensureDispatchMap();
+                dispatchMap.invalidateSize();
+                renderMap();
+            } catch (error) {
+                console.error("Transporter map render failed", error);
+            }
+        }, 140);
     }
 
     function selectBooking(bookingId) {
         state.selectedBookingId = bookingId;
         renderSelectedBooking();
-        renderMap();
-        if (typeof switchTab === 'function') switchTab('route');
+        if (typeof switchTab === 'function') {
+            switchTab('route');
+        }
+        scheduleDispatchMapRender();
     }
 
     function bookingCard(booking, {open}) {
@@ -531,7 +732,9 @@
             state.selectedBookingId = preferred ? preferred.id : null;
         }
         renderSelectedBooking();
-        renderMap();
+        if (document.getElementById("tab-route").style.display !== "none") {
+            scheduleDispatchMapRender();
+        }
     }
 
     async function loadSetup() {
@@ -550,6 +753,8 @@
 
     async function refreshDashboard() {
         await Promise.all([loadSetup(), loadOpenBookings(), loadAssignedBookings()]);
+        await ensureDefaultDispatchAvailability();
+        await loadOpenBookings();
         renderBookings();
     }
 
@@ -566,7 +771,9 @@
         const detail = await apiRequest(`/api/bookings/${booking.id}/tracking/`, {method: "GET"});
         state.assignedBookings = state.assignedBookings.map((item) => item.id === detail.id ? detail : item);
         renderSelectedBooking();
-        renderMap();
+        if (document.getElementById("tab-route").style.display !== "none") {
+            scheduleDispatchMapRender();
+        }
     }
 
     async function syncLiveLocation(coords) {
@@ -728,6 +935,18 @@
 
     document.getElementById("reload-open-bookings").addEventListener("click", refreshDashboard);
     document.getElementById("reload-assigned-bookings").addEventListener("click", refreshDashboard);
+    document.getElementById("recenter-dispatch-map").addEventListener("click", recenterDispatchMap);
+    document.getElementById("open-profile-modal").addEventListener("click", () => {
+        document.getElementById("profile-modal").hidden = false;
+    });
+    document.getElementById("close-profile-modal").addEventListener("click", () => {
+        document.getElementById("profile-modal").hidden = true;
+    });
+    document.getElementById("profile-modal").addEventListener("click", (event) => {
+        if (event.target.id === "profile-modal") {
+            document.getElementById("profile-modal").hidden = true;
+        }
+    });
     document.getElementById("driver-popup-close").addEventListener("click", hidePopup);
     document.getElementById("driver-popup").addEventListener("click", (event) => {
         if (event.target.id === "driver-popup") {
@@ -750,7 +969,9 @@
         }
 
         if (tabId === 'route') {
-            setTimeout(() => map.invalidateSize(), 50);
+            setTimeout(() => {
+                scheduleDispatchMapRender();
+            }, 80);
         }
     }
 

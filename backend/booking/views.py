@@ -90,6 +90,9 @@ class DriverOpenBookingsView(generics.ListAPIView):
                 is_available=True,
             ).values_list("vehicle_type", flat=True),
         )
+        profile = getattr(self.request.user, "transporter_profile", None)
+        if not profile or profile.current_latitude is None or profile.current_longitude is None:
+            return pending_bookings
         matching_ids = [
             booking.id for booking in pending_bookings
             if booking_matches_driver(booking, self.request.user)

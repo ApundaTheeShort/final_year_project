@@ -80,6 +80,31 @@
         box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.1);
     }
     .result-item small { color: var(--accent); display: inline-block; margin-top: 0.5rem; font-weight: 500; }
+
+    .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        z-index: 1000;
+    }
+
+    .modal-backdrop[hidden] {
+        display: none;
+    }
+
+    .modal-card {
+        width: min(100%, 560px);
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        padding: 2rem;
+    }
 </style>
 {% endblock %}
 
@@ -161,6 +186,9 @@
 
                 <!-- Map side -->
                 <div class="stack">
+                    <div style="display: flex; justify-content: flex-end;">
+                        <button type="button" class="btn btn-outline" id="recenter-booking-map" style="padding: 0.5rem 1rem;">Recenter Map</button>
+                    </div>
                     <div id="booking-map" style="min-height: 480px; height: 100%; border-radius: var(--radius-md); box-shadow: inset 0 0 0 1px var(--border);"></div>
                     <p id="map-message" class="message" style="margin-top: 0.5rem;" hidden></p>
                 </div>
@@ -217,7 +245,10 @@
     <section class="panel">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
             <h2 style="margin: 0;">Live Tracking Map</h2>
-            <button type="button" class="btn btn-danger" id="stop-tracking" hidden>Stop Tracking</button>
+            <div style="display: flex; gap: 0.75rem; align-items: center;">
+                <button type="button" class="btn btn-outline" id="recenter-tracking-map">Recenter Map</button>
+                <button type="button" class="btn btn-danger" id="stop-tracking" hidden>Stop Tracking</button>
+            </div>
         </div>
         <div class="grid grid-2">
             <div id="tracking-map"></div>
@@ -244,6 +275,10 @@
             <p style="margin: 0;"><strong>Email:</strong> {{ user.email }}</p>
             <p style="margin: 0;"><strong>Role:</strong> Farmer</p>
         </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 1rem;">
+            <button type="button" class="btn btn-outline" id="open-profile-modal">Update Profile</button>
+        </div>
         
         <div style="display: flex; gap: 1rem; margin-top: 2rem; flex-wrap: wrap;">
             <a href="{% url 'password_change' %}" class="btn btn-outline" style="flex: 1; text-align: center; padding: 1rem;">Change Password</a>
@@ -253,6 +288,36 @@
             <button type="submit" class="btn" style="width: 100%; background: #ef4444; border-color: #ef4444; padding: 1rem; font-size: 1.05rem; box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);">Sign Out</button>
         </form>
     </section>
+</div>
+
+<div id="profile-modal" class="modal-backdrop" hidden>
+    <div class="modal-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3 style="margin: 0;">Update Profile</h3>
+            <button type="button" class="btn btn-outline" id="close-profile-modal">Close</button>
+        </div>
+        <form method="post" action="{% url 'profile-update' %}" class="stack">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.path }}">
+            <div class="grid grid-2" style="gap: 1rem;">
+                <label>First Name
+                    {{ profile_form.first_name }}
+                </label>
+                <label>Last Name
+                    {{ profile_form.last_name }}
+                </label>
+                <label>Phone Number
+                    {{ profile_form.phone_number }}
+                </label>
+                <label>Email Address
+                    {{ profile_form.email }}
+                </label>
+            </div>
+            <div style="display: flex; justify-content: flex-end;">
+                <button type="submit" class="btn">Save Account Changes</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 
@@ -280,6 +345,8 @@
         bookingStatuses: {},
         bookingsLoaded: false,
         bookingsPollId: null,
+        trackingRenderTimer: null,
+        trackedRoutePreviewCache: {},
     };
 
     const map = L.map("booking-map").setView([-1.286389, 36.817223], 11);
@@ -291,17 +358,25 @@
     let pickupMarker = null;
     let dropoffMarker = null;
     let routeLine = null;
-    const trackingMap = L.map("tracking-map").setView([-1.286389, 36.817223], 11);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-        maxZoom: 19,
-        attribution: "&copy; OpenStreetMap contributors",
-    }).addTo(trackingMap);
+    let trackingMap = null;
 
     let trackingPickupMarker = null;
     let trackingDropoffMarker = null;
     let trackingRouteLine = null;
     let trackingTrailLine = null;
     let trackingDriverMarker = null;
+
+    function ensureTrackingMap() {
+        if (trackingMap) {
+            return trackingMap;
+        }
+        trackingMap = L.map("tracking-map", {preferCanvas: true}).setView([-1.286389, 36.817223], 11);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 19,
+            attribution: "&copy; OpenStreetMap contributors",
+        }).addTo(trackingMap);
+        return trackingMap;
+    }
 
     async function apiRequest(url, options = {}) {
         const response = await fetch(url, {
@@ -342,8 +417,116 @@
         element.classList.remove("error");
     }
 
+    function safeLatLng(latitude, longitude) {
+        const lat = Number(latitude);
+        const lng = Number(longitude);
+        if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+            return null;
+        }
+        return [lat, lng];
+    }
+
     function placeLatLng(place) {
-        return [Number(place.latitude), Number(place.longitude)];
+        return safeLatLng(place.latitude, place.longitude);
+    }
+
+    function toLeafletLatLngs(points) {
+        if (!Array.isArray(points)) {
+            return [];
+        }
+        return points
+            .filter((point) => Array.isArray(point) && point.length >= 2)
+            .map((point) => safeLatLng(point[0], point[1]))
+            .filter(Boolean)
+            .map((point) => L.latLng(point[0], point[1]));
+    }
+
+    function addSafePolyline(targetMap, points, options) {
+        const latLngs = toLeafletLatLngs(points);
+        if (latLngs.length < 2) {
+            return null;
+        }
+        try {
+            const size = targetMap.getSize();
+            if (!size || size.x <= 0 || size.y <= 0) {
+                return null;
+            }
+            return L.polyline(latLngs, options).addTo(targetMap);
+        } catch (error) {
+            console.error("Unable to add polyline", error);
+            return null;
+        }
+    }
+
+    function fitMapToLayers(targetMap, layers, padding = [30, 30]) {
+        const size = targetMap.getSize();
+        if (!size || size.x <= 0 || size.y <= 0) {
+            return;
+        }
+
+        const bounds = L.latLngBounds([]);
+        for (const layer of layers.filter(Boolean)) {
+            try {
+                if (typeof layer.getLatLng === "function") {
+                    const latLng = layer.getLatLng();
+                    if (latLng) {
+                        bounds.extend(latLng);
+                    }
+                    continue;
+                }
+                if (typeof layer.getLatLngs === "function") {
+                    const stack = [...layer.getLatLngs().flat(Infinity)];
+                    for (const latLng of stack) {
+                        if (latLng && Number.isFinite(latLng.lat) && Number.isFinite(latLng.lng)) {
+                            bounds.extend(latLng);
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error("Unable to inspect map layer for bounds", error);
+            }
+        }
+
+        if (bounds.isValid()) {
+            try {
+                targetMap.fitBounds(bounds, {padding});
+            } catch (error) {
+                console.error("Unable to fit map bounds", error);
+            }
+        }
+    }
+
+    function bookingPlacePayload(booking, prefix) {
+        const place = booking?.[`${prefix}_place`];
+        if (place?.latitude && place?.longitude) {
+            return place;
+        }
+        return {
+            place_id: booking?.[`${prefix}_place_id`] || "",
+            source: booking?.[`${prefix}_place_source`] || "",
+            address: booking?.[`${prefix}_address`] || "",
+            latitude: booking?.[`${prefix}_latitude`],
+            longitude: booking?.[`${prefix}_longitude`],
+        };
+    }
+
+    function sanitizeRouteCoordinates(coordinates) {
+        if (!Array.isArray(coordinates)) {
+            return [];
+        }
+        return coordinates
+            .filter((pair) => Array.isArray(pair) && pair.length >= 2)
+            .map((pair) => safeLatLng(pair[1], pair[0]))
+            .filter(Boolean);
+    }
+
+    function sanitizeTrackingCoordinates(updates) {
+        if (!Array.isArray(updates)) {
+            return [];
+        }
+        return updates
+            .map((update) => safeLatLng(update.latitude, update.longitude))
+            .filter(Boolean);
     }
 
     function requestBrowserLocation() {
@@ -366,6 +549,9 @@
     }
 
     function clearTrackingMap() {
+        if (!trackingMap) {
+            return;
+        }
         if (trackingPickupMarker) {
             trackingMap.removeLayer(trackingPickupMarker);
             trackingPickupMarker = null;
@@ -396,13 +582,16 @@
             stopButton.hidden = true;
             element.innerHTML = '<p class="muted">Click `Track live` on a booking to open its route and follow the transporter from pickup to destination.</p>';
             clearTrackingMap();
-            trackingMap.setView([-1.286389, 36.817223], 11);
+            if (trackingMap) {
+                trackingMap.setView([-1.286389, 36.817223], 11);
+            }
             return;
         }
 
         stopButton.hidden = false;
         const transporterName = booking.transporter_profile?.company_name || "Transporter assigned";
         const trackingVisible = ["picked_up", "in_transit", "delivered"].includes(booking.status);
+        const tripTime = booking.estimated_duration_minutes || "Unavailable";
         element.innerHTML = `
             <div class="stack">
                 <div class="row">
@@ -413,6 +602,8 @@
                 <p class="meta">Pickup: ${escapeHtml(booking.pickup_address)}</p>
                 <p class="meta">Dropoff: ${escapeHtml(booking.dropoff_address)}</p>
                 <p class="meta">Distance: ${escapeHtml(booking.estimated_distance_km || "N/A")} km</p>
+                <p class="meta">Estimated trip time: ${escapeHtml(tripTime)} minutes</p>
+                <p class="meta">The map shows the planned road route from pickup to destination.</p>
                 <p class="meta">${trackingVisible ? "Live transport tracking is active on the map." : "Driver location becomes visible after pickup starts."}</p>
                 ${trackingVisible ? "" : '<p class="muted">Live driver tracking is hidden until the goods are picked up and transportation has started.</p>'}
             </div>
@@ -445,45 +636,101 @@
     }
 
     function renderTrackingMap() {
+        const trackingMapInstance = ensureTrackingMap();
         clearTrackingMap();
         const booking = state.trackedBooking;
         if (!booking) {
             return;
         }
         const trackingVisible = ["picked_up", "in_transit", "delivered"].includes(booking.status);
+        const pickupPoint = safeLatLng(booking.pickup_latitude, booking.pickup_longitude);
+        const dropoffPoint = safeLatLng(booking.dropoff_latitude, booking.dropoff_longitude);
 
-        trackingPickupMarker = L.marker([Number(booking.pickup_latitude), Number(booking.pickup_longitude)]).addTo(trackingMap).bindPopup("Pickup");
-        trackingDropoffMarker = L.marker([Number(booking.dropoff_latitude), Number(booking.dropoff_longitude)]).addTo(trackingMap).bindPopup("Dropoff");
+        if (pickupPoint) {
+            trackingPickupMarker = L.marker(L.latLng(pickupPoint[0], pickupPoint[1])).addTo(trackingMapInstance).bindPopup("Pickup");
+        }
+        if (dropoffPoint) {
+            trackingDropoffMarker = L.marker(L.latLng(dropoffPoint[0], dropoffPoint[1])).addTo(trackingMapInstance).bindPopup("Dropoff");
+        }
 
-        const plannedRoute = booking.route_geometry?.coordinates?.map((pair) => [pair[1], pair[0]]) || [
-            [Number(booking.pickup_latitude), Number(booking.pickup_longitude)],
-            [Number(booking.dropoff_latitude), Number(booking.dropoff_longitude)],
-        ];
-        trackingRouteLine = L.polyline(plannedRoute, {color: "#0f766e", weight: 5, opacity: 0.75}).addTo(trackingMap);
+        let plannedRoute = sanitizeRouteCoordinates(booking.route_geometry?.coordinates);
+        if (plannedRoute.length < 2) {
+            plannedRoute = [pickupPoint, dropoffPoint].filter(Boolean);
+        }
+        trackingRouteLine = addSafePolyline(trackingMapInstance, plannedRoute, {color: "#0f766e", weight: 5, opacity: 0.75});
 
         if (trackingVisible) {
-            const trackingPoints = (booking.tracking_updates || []).map((update) => [
-                Number(update.latitude),
-                Number(update.longitude),
-            ]);
-            if (trackingPoints.length) {
-                trackingTrailLine = L.polyline(trackingPoints, {color: "#f59e0b", weight: 4, opacity: 0.9}).addTo(trackingMap);
-                trackingDriverMarker = L.marker(trackingPoints[trackingPoints.length - 1]).addTo(trackingMap).bindPopup("Live transporter");
-            } else if (booking.transporter_profile?.current_latitude && booking.transporter_profile?.current_longitude) {
-                trackingDriverMarker = L.marker([
-                    Number(booking.transporter_profile.current_latitude),
-                    Number(booking.transporter_profile.current_longitude),
-                ]).addTo(trackingMap).bindPopup("Current transporter location");
+            const trackingPoints = sanitizeTrackingCoordinates(booking.tracking_updates);
+            if (trackingPoints.length >= 2) {
+                trackingTrailLine = addSafePolyline(trackingMapInstance, trackingPoints, {color: "#f59e0b", weight: 4, opacity: 0.9});
+                const lastPoint = trackingPoints[trackingPoints.length - 1];
+                trackingDriverMarker = L.marker(L.latLng(lastPoint[0], lastPoint[1])).addTo(trackingMapInstance).bindPopup("Live transporter");
+            } else if (trackingPoints.length === 1) {
+                trackingDriverMarker = L.marker(L.latLng(trackingPoints[0][0], trackingPoints[0][1])).addTo(trackingMapInstance).bindPopup("Live transporter");
+            } else {
+                const transporterPoint = safeLatLng(
+                    booking.transporter_profile?.current_latitude,
+                    booking.transporter_profile?.current_longitude,
+                );
+                if (transporterPoint) {
+                    trackingDriverMarker = L.marker(L.latLng(transporterPoint[0], transporterPoint[1])).addTo(trackingMapInstance).bindPopup("Current transporter location");
+                }
             }
         }
 
-        const bounds = L.featureGroup(
-            [trackingPickupMarker, trackingDropoffMarker, trackingRouteLine, trackingTrailLine, trackingDriverMarker].filter(Boolean)
-        ).getBounds();
-        if (bounds.isValid()) {
-            trackingMap.fitBounds(bounds, {padding: [30, 30]});
+        fitMapToLayers(
+            trackingMapInstance,
+            [trackingPickupMarker, trackingDropoffMarker, trackingRouteLine, trackingTrailLine, trackingDriverMarker],
+            [30, 30],
+        );
+        window.setTimeout(() => trackingMapInstance.invalidateSize(), 0);
+    }
+
+    function scheduleTrackingMapRender() {
+        if (state.trackingRenderTimer) {
+            window.clearTimeout(state.trackingRenderTimer);
         }
-        window.setTimeout(() => trackingMap.invalidateSize(), 0);
+        state.trackingRenderTimer = window.setTimeout(() => {
+            try {
+                const trackingMapInstance = ensureTrackingMap();
+                trackingMapInstance.invalidateSize();
+                renderTrackingMap();
+            } catch (error) {
+                console.error("Farmer tracking map render failed", error);
+                showMessage(document.getElementById("tracking-message"), "Live route is temporarily unavailable.", true);
+            }
+        }, 140);
+    }
+
+    async function ensureTrackedBookingRoute(booking) {
+        const existingRoute = sanitizeRouteCoordinates(booking.route_geometry?.coordinates);
+        if (existingRoute.length >= 2) {
+            return booking;
+        }
+
+        if (state.trackedRoutePreviewCache[booking.id]) {
+            return {
+                ...booking,
+                route_geometry: state.trackedRoutePreviewCache[booking.id].geometry,
+                estimated_distance_km: booking.estimated_distance_km || state.trackedRoutePreviewCache[booking.id].distance_km,
+                estimated_duration_minutes: booking.estimated_duration_minutes || state.trackedRoutePreviewCache[booking.id].duration_minutes,
+            };
+        }
+
+        const routePreview = await apiRequest("/api/maps/routes/preview/", {
+            method: "POST",
+            body: JSON.stringify({
+                pickup_place: bookingPlacePayload(booking, "pickup"),
+                dropoff_place: bookingPlacePayload(booking, "dropoff"),
+            }),
+        });
+        state.trackedRoutePreviewCache[booking.id] = routePreview;
+        return {
+            ...booking,
+            route_geometry: routePreview.geometry,
+            estimated_distance_km: booking.estimated_distance_km || routePreview.distance_km,
+            estimated_duration_minutes: booking.estimated_duration_minutes || routePreview.duration_minutes,
+        };
     }
 
     async function refreshTrackedBooking() {
@@ -491,12 +738,15 @@
             return;
         }
         try {
-            state.trackedBooking = await apiRequest(`/api/bookings/${state.trackedBookingId}/tracking/`, {method: "GET"});
+            const booking = await apiRequest(`/api/bookings/${state.trackedBookingId}/tracking/`, {method: "GET"});
+            state.trackedBooking = await ensureTrackedBookingRoute(booking);
             hideMessage(document.getElementById("tracking-message"));
             renderTrackingSummary();
-            renderTrackingMap();
+            if (document.getElementById("tab-track").style.display !== "none") {
+                scheduleTrackingMapRender();
+            }
         } catch (error) {
-            showMessage(document.getElementById("tracking-message"), error.message, true);
+            showMessage(document.getElementById("tracking-message"), "Unable to load the route map right now.", true);
         }
     }
 
@@ -568,27 +818,52 @@
         }
 
         if (state.pickupPlace) {
-            pickupMarker = L.marker(placeLatLng(state.pickupPlace)).addTo(map).bindPopup("Pickup");
+            const pickupPoint = placeLatLng(state.pickupPlace);
+            if (pickupPoint) {
+                pickupMarker = L.marker(L.latLng(pickupPoint[0], pickupPoint[1])).addTo(map).bindPopup("Pickup");
+            }
         }
         if (state.dropoffPlace) {
-            dropoffMarker = L.marker(placeLatLng(state.dropoffPlace)).addTo(map).bindPopup("Delivery");
+            const dropoffPoint = placeLatLng(state.dropoffPlace);
+            if (dropoffPoint) {
+                dropoffMarker = L.marker(L.latLng(dropoffPoint[0], dropoffPoint[1])).addTo(map).bindPopup("Delivery");
+            }
         }
     }
 
     function updateMapViewport() {
         const points = [];
         if (state.pickupPlace) {
-            points.push(placeLatLng(state.pickupPlace));
+            const pickupPoint = placeLatLng(state.pickupPlace);
+            if (pickupPoint) {
+                points.push(pickupPoint);
+            }
         }
         if (state.dropoffPlace) {
-            points.push(placeLatLng(state.dropoffPlace));
+            const dropoffPoint = placeLatLng(state.dropoffPlace);
+            if (dropoffPoint) {
+                points.push(dropoffPoint);
+            }
         }
         if (points.length === 1) {
-            map.flyTo(points[0], 14);
+            map.flyTo(L.latLng(points[0][0], points[0][1]), 14);
         }
         if (points.length === 2) {
-            map.fitBounds(points, {padding: [40, 40]});
+            map.fitBounds(toLeafletLatLngs(points), {padding: [40, 40]});
         }
+    }
+
+    function recenterBookingMap() {
+        fitMapToLayers(map, [pickupMarker, dropoffMarker, routeLine], [40, 40]);
+    }
+
+    function recenterTrackingMap() {
+        const trackingMapInstance = ensureTrackingMap();
+        fitMapToLayers(
+            trackingMapInstance,
+            [trackingPickupMarker, trackingDropoffMarker, trackingRouteLine, trackingTrailLine, trackingDriverMarker],
+            [30, 30],
+        );
     }
 
     function drawRouteGeometry() {
@@ -601,13 +876,11 @@
             return;
         }
 
-        let points;
-        if (state.routePreview?.geometry?.coordinates?.length) {
-            points = state.routePreview.geometry.coordinates.map((pair) => [pair[1], pair[0]]);
-        } else {
-            points = [placeLatLng(state.pickupPlace), placeLatLng(state.dropoffPlace)];
+        let points = sanitizeRouteCoordinates(state.routePreview?.geometry?.coordinates);
+        if (points.length < 2) {
+            points = [placeLatLng(state.pickupPlace), placeLatLng(state.dropoffPlace)].filter(Boolean);
         }
-        routeLine = L.polyline(points, {color: "#0f766e", weight: 5, opacity: 0.8}).addTo(map);
+        routeLine = addSafePolyline(map, points, {color: "#0f766e", weight: 5, opacity: 0.8});
     }
 
     function resetBookingComposer() {
@@ -819,8 +1092,8 @@
         const trackButton = event.target.closest("[data-track-booking-id]");
         if (trackButton) {
             const bookingId = Number(trackButton.dataset.trackBookingId);
-            await startTracking(bookingId);
             switchTab('track');
+            await startTracking(bookingId);
             return;
         }
 
@@ -869,6 +1142,19 @@
 
     document.getElementById("reload-bookings").addEventListener("click", loadBookings);
     document.getElementById("stop-tracking").addEventListener("click", stopTracking);
+    document.getElementById("recenter-booking-map").addEventListener("click", recenterBookingMap);
+    document.getElementById("recenter-tracking-map").addEventListener("click", recenterTrackingMap);
+    document.getElementById("open-profile-modal").addEventListener("click", () => {
+        document.getElementById("profile-modal").hidden = false;
+    });
+    document.getElementById("close-profile-modal").addEventListener("click", () => {
+        document.getElementById("profile-modal").hidden = true;
+    });
+    document.getElementById("profile-modal").addEventListener("click", (event) => {
+        if (event.target.id === "profile-modal") {
+            document.getElementById("profile-modal").hidden = true;
+        }
+    });
 
     renderModeButtons();
     renderPlaceSummary("pickup-selected", "Pickup", null);
@@ -895,7 +1181,13 @@
         if (tabId === 'create') {
             setTimeout(() => map.invalidateSize(), 50);
         } else if (tabId === 'track') {
-            setTimeout(() => trackingMap.invalidateSize(), 50);
+            setTimeout(() => {
+                const trackingMapInstance = ensureTrackingMap();
+                trackingMapInstance.invalidateSize();
+                if (state.trackedBookingId) {
+                    scheduleTrackingMapRender();
+                }
+            }, 80);
         } else if (tabId === 'list') {
             loadBookings();
         }

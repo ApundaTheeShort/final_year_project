@@ -17,6 +17,8 @@ class TransporterProfileSerializer(serializers.ModelSerializer):
 
 
 class VehicleSerializer(serializers.ModelSerializer):
+    id = serializers.IntegerField(required=False)
+
     class Meta:
         model = Vehicle
         fields = (
@@ -26,11 +28,32 @@ class VehicleSerializer(serializers.ModelSerializer):
             "capacity_kg",
             "is_available",
         )
+        extra_kwargs = {
+            "registration_number": {"validators": []},
+        }
 
 
 class DriverVehicleSetupSerializer(serializers.Serializer):
     profile = TransporterProfileSerializer()
     vehicles = VehicleSerializer(many=True)
+
+    def validate_vehicles(self, vehicles):
+        seen = set()
+        for vehicle in vehicles:
+            registration_number = vehicle["registration_number"]
+            if registration_number in seen:
+                raise serializers.ValidationError("Vehicle registration numbers must be unique.")
+            seen.add(registration_number)
+
+            vehicle_id = vehicle.get("id")
+            existing = Vehicle.objects.filter(registration_number=registration_number)
+            if vehicle_id:
+                existing = existing.exclude(id=vehicle_id)
+            if existing.exists():
+                raise serializers.ValidationError(
+                    f"Vehicle registration number {registration_number} already exists."
+                )
+        return vehicles
 
     def create(self, validated_data):
         profile_data = validated_data["profile"]

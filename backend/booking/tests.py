@@ -373,6 +373,57 @@ class BookingFlowTests(TestCase):
         self.assertEqual(far_response.data[0]["id"], booking_id)
 
     @patch("booking.serializers.get_route_details")
+    def test_driver_without_saved_location_still_sees_compatible_open_booking(self, mocked_route):
+        mocked_route.return_value = {
+            "distance_km": "12.40",
+            "duration_minutes": "21.00",
+            "geometry": {"type": "LineString", "coordinates": [[36.8219, -1.2921], [36.8, -1.3]]},
+        }
+        self.driver.transporter_profile.current_latitude = None
+        self.driver.transporter_profile.current_longitude = None
+        self.driver.transporter_profile.save(update_fields=["current_latitude", "current_longitude"])
+
+        self.client.force_authenticate(self.farmer)
+        create_response = self.client.post(
+            "/api/bookings/",
+            {
+                "produce_name": "Cassava",
+                "produce_description": "Fresh cassava",
+                "weight_kg": "800.00",
+                "pickup_place": {
+                    "place_id": "11",
+                    "source": "nominatim",
+                    "osm_type": "W",
+                    "osm_id": "11",
+                    "name": "Farm Gate",
+                    "address": "Farm Gate, Kiambu",
+                    "latitude": "-1.292100",
+                    "longitude": "36.821900",
+                },
+                "dropoff_place": {
+                    "place_id": "22",
+                    "source": "nominatim",
+                    "osm_type": "W",
+                    "osm_id": "22",
+                    "name": "Depot",
+                    "address": "Depot, Nairobi",
+                    "latitude": "-1.300000",
+                    "longitude": "36.800000",
+                },
+            },
+            format="json",
+        )
+        booking_id = create_response.data["id"]
+
+        self.client.force_authenticate(self.driver)
+        response = self.client.get("/api/bookings/driver/open/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]["id"], booking_id)
+
+
+    @patch("booking.serializers.get_route_details")
     def test_pickup_and_delivery_require_driver_to_be_within_50_metres_and_in_transit_is_automatic(self, mocked_route):
         mocked_route.return_value = {
             "distance_km": "12.40",

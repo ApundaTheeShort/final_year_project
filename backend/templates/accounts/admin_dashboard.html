@@ -68,6 +68,46 @@
     }
 
     tr:last-child td { border-bottom: none; }
+
+    .table-actions {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+        flex-wrap: wrap;
+    }
+
+    .table-actions form {
+        margin: 0;
+    }
+
+    .table-actions select {
+        min-width: 150px;
+    }
+
+    .modal-backdrop {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.6);
+        backdrop-filter: blur(4px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1.5rem;
+        z-index: 1000;
+    }
+
+    .modal-backdrop[hidden] {
+        display: none;
+    }
+
+    .modal-card {
+        width: min(100%, 560px);
+        background: #fff;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-lg);
+        box-shadow: var(--shadow);
+        padding: 2rem;
+    }
 </style>
 {% endblock %}
 
@@ -95,6 +135,7 @@
 
 <div class="tabs" style="display: flex; gap: 1rem; margin-bottom: 2rem; border-bottom: 1px solid var(--border);">
     <button type="button" class="tab-btn active" onclick="switchTab('metrics')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--accent); border-bottom: 2px solid var(--accent); cursor: pointer; border-radius: 0;">Revenue Metrics</button>
+    <button type="button" class="tab-btn" onclick="switchTab('bookings')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Bookings</button>
     <button type="button" class="tab-btn" onclick="switchTab('pricing')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Pricing & Rates</button>
     <button type="button" class="tab-btn" onclick="switchTab('account')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Account Settings</button>
 </div>
@@ -162,6 +203,126 @@
     </div>
 </div>
 
+<div id="tab-bookings" class="tab-content" style="display: none;">
+    <div class="stack" style="max-width: 1200px; margin: 0 auto; gap: 2rem;">
+        <section class="panel" style="padding: 1.5rem;">
+            <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">Active Deliveries</h3>
+            <div style="overflow-x: auto;">
+                {% if active_deliveries %}
+                <table style="margin-top: 0;">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Produce</th>
+                            <th>Farmer</th>
+                            <th>Transporter</th>
+                            <th>Status</th>
+                            <th>Pickup</th>
+                            <th>Dropoff</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for booking in active_deliveries %}
+                        <tr>
+                            <td>#{{ booking.id }}</td>
+                            <td>{{ booking.produce_name }}</td>
+                            <td>{{ booking.farmer.first_name }} {{ booking.farmer.last_name }}</td>
+                            <td>{% if booking.transporter %}{{ booking.transporter.first_name }} {{ booking.transporter.last_name }}{% else %}<span class="muted">Unassigned</span>{% endif %}</td>
+                            <td>{{ booking.get_status_display }}</td>
+                            <td>{{ booking.pickup_address }}</td>
+                            <td>{{ booking.dropoff_address }}</td>
+                            <td>
+                                <div class="table-actions">
+                                    <form method="post" action="{% url 'admin-dashboard' %}">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="update-booking-status">
+                                        <input type="hidden" name="booking_id" value="{{ booking.id }}">
+                                        <select name="status">
+                                            {% for value, label in booking_status_choices %}
+                                            <option value="{{ value }}"{% if booking.status == value %} selected{% endif %}>{{ label }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <button type="submit" class="btn btn-outline">Update</button>
+                                    </form>
+                                    <form method="post" action="{% url 'admin-dashboard' %}" onsubmit="return confirm('Delete booking #{{ booking.id }}?');">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="delete-booking">
+                                        <input type="hidden" name="booking_id" value="{{ booking.id }}">
+                                        <button type="submit" class="btn btn-danger">Delete</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="muted">No active deliveries right now.</p>
+                {% endif %}
+            </div>
+        </section>
+
+        <section class="panel" style="padding: 1.5rem;">
+            <h3 style="margin-bottom: 1rem; font-size: 1.25rem;">All Bookings</h3>
+            <div style="overflow-x: auto;">
+                {% if all_bookings %}
+                <table style="margin-top: 0;">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Produce</th>
+                            <th>Farmer</th>
+                            <th>Vehicle</th>
+                            <th>Status</th>
+                            <th>Price</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for booking in all_bookings %}
+                        <tr>
+                            <td>#{{ booking.id }}</td>
+                            <td>{{ booking.produce_name }}</td>
+                            <td>{{ booking.farmer.first_name }} {{ booking.farmer.last_name }}</td>
+                            <td>{{ booking.get_vehicle_type_required_display }}</td>
+                            <td>{{ booking.get_status_display }}</td>
+                            <td>KES {{ booking.quoted_price|default:"0.00" }}</td>
+                            <td>{{ booking.created_at|date:"Y-m-d H:i" }}</td>
+                            <td>
+                                <div class="table-actions">
+                                    <form method="post" action="{% url 'admin-dashboard' %}">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="update-booking-status">
+                                        <input type="hidden" name="booking_id" value="{{ booking.id }}">
+                                        <select name="status">
+                                            {% for value, label in booking_status_choices %}
+                                            <option value="{{ value }}"{% if booking.status == value %} selected{% endif %}>{{ label }}</option>
+                                            {% endfor %}
+                                        </select>
+                                        <button type="submit" class="btn btn-outline">Save</button>
+                                    </form>
+                                    <form method="post" action="{% url 'admin-dashboard' %}" onsubmit="return confirm('Delete booking #{{ booking.id }}?');">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="delete-booking">
+                                        <input type="hidden" name="booking_id" value="{{ booking.id }}">
+                                        <button type="submit" class="btn btn-danger">Delete</button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+                {% else %}
+                <p class="muted">No bookings available.</p>
+                {% endif %}
+            </div>
+        </section>
+    </div>
+</div>
+
 <!-- Tab 2: Pricing -->
 <div id="tab-pricing" class="tab-content" style="display: none;">
     <div class="stack" style="max-width: 900px; margin: 0 auto; gap: 2rem;">
@@ -176,6 +337,7 @@
             
             <form method="post" action="{% url 'admin-dashboard' %}" class="stack">
                 {% csrf_token %}
+                <input type="hidden" name="action" value="update-rates">
                 <div class="grid grid-2" style="gap: 1.5rem;">
                     <label>Motorbike (per km)
                         {{ rate_form.motorbike }}
@@ -237,6 +399,10 @@
             <p style="margin: 0;"><strong>Email:</strong> {{ user.email }}</p>
             <p style="margin: 0;"><strong>Access Level:</strong> Staff Platform Dashboard</p>
         </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 1rem;">
+            <button type="button" class="btn btn-outline" id="open-profile-modal">Update Profile</button>
+        </div>
         
         <div style="display: flex; gap: 1rem; margin-top: 2rem; flex-wrap: wrap;">
             <a href="/admin/" class="btn btn-outline" style="flex: 1; text-align: center; padding: 1rem;">Django Admin</a>
@@ -247,6 +413,36 @@
             <button type="submit" class="btn" style="width: 100%; background: #475569; border-color: #475569; padding: 1rem; font-size: 1.05rem;">Sign Out</button>
         </form>
     </section>
+</div>
+
+<div id="profile-modal" class="modal-backdrop" hidden>
+    <div class="modal-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3 style="margin: 0;">Update Profile</h3>
+            <button type="button" class="btn btn-outline" id="close-profile-modal">Close</button>
+        </div>
+        <form method="post" action="{% url 'profile-update' %}" class="stack">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="{{ request.path }}">
+            <div class="grid grid-2" style="gap: 1rem;">
+                <label>First Name
+                    {{ profile_form.first_name }}
+                </label>
+                <label>Last Name
+                    {{ profile_form.last_name }}
+                </label>
+                <label>Phone Number
+                    {{ profile_form.phone_number }}
+                </label>
+                <label>Email Address
+                    {{ profile_form.email }}
+                </label>
+            </div>
+            <div style="display: flex; justify-content: flex-end;">
+                <button type="submit" class="btn">Save Account Changes</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 <script>
@@ -264,5 +460,17 @@
             activeBtn.style.borderBottom = '2px solid var(--accent)';
         }
     }
+
+    document.getElementById("open-profile-modal").addEventListener("click", () => {
+        document.getElementById("profile-modal").hidden = false;
+    });
+    document.getElementById("close-profile-modal").addEventListener("click", () => {
+        document.getElementById("profile-modal").hidden = true;
+    });
+    document.getElementById("profile-modal").addEventListener("click", (event) => {
+        if (event.target.id === "profile-modal") {
+            document.getElementById("profile-modal").hidden = true;
+        }
+    });
 </script>
 {% endblock %}

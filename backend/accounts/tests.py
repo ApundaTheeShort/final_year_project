@@ -52,9 +52,11 @@ class AdminDashboardTests(TestCase):
         response = self.client.get("/accounts/admin-dashboard/")
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "System admin dashboard")
+        self.assertContains(response, "System Administration")
         self.assertContains(response, "KES 200.00")
         self.assertContains(response, "KES 2000")
+        self.assertContains(response, "All Bookings")
+        self.assertContains(response, "Active Deliveries")
 
     def test_non_staff_user_cannot_view_admin_dashboard(self):
         self.client.force_login(self.farmer)
@@ -67,6 +69,7 @@ class AdminDashboardTests(TestCase):
         response = self.client.post(
             "/accounts/admin-dashboard/",
             {
+                "action": "update-rates",
                 "motorbike": "120.00",
                 "pickup": "220.00",
                 "van": "275.00",
@@ -82,6 +85,75 @@ class AdminDashboardTests(TestCase):
             str(TransportPricing.objects.get(vehicle_type="pickup").price_per_km),
             "220.00",
         )
+
+    def test_staff_user_can_update_booking_status_from_dashboard(self):
+        booking = Booking.objects.create(
+            farmer=self.farmer,
+            produce_name="Maize",
+            produce_description="Dry",
+            weight_kg="300.00",
+            pickup_address="Farm Gate",
+            pickup_latitude="-1.292100",
+            pickup_longitude="36.821900",
+            dropoff_address="Warehouse",
+            dropoff_latitude="-1.300000",
+            dropoff_longitude="36.800000",
+            search_radius_km="20.00",
+            estimated_distance_km="10.00",
+            vehicle_type_required="pickup",
+            quoted_price="2000.00",
+            status="accepted",
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.post(
+            "/accounts/admin-dashboard/",
+            {
+                "action": "update-booking-status",
+                "booking_id": booking.id,
+                "status": "delivered",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        booking.refresh_from_db()
+        self.assertEqual(booking.status, "delivered")
+        self.assertIsNotNone(booking.delivered_at)
+        self.assertContains(response, f"Booking #{booking.id} updated to Delivered.")
+
+    def test_staff_user_can_delete_booking_from_dashboard(self):
+        booking = Booking.objects.create(
+            farmer=self.farmer,
+            produce_name="Beans",
+            produce_description="Bagged",
+            weight_kg="120.00",
+            pickup_address="Farm Gate",
+            pickup_latitude="-1.292100",
+            pickup_longitude="36.821900",
+            dropoff_address="Depot",
+            dropoff_latitude="-1.300000",
+            dropoff_longitude="36.800000",
+            search_radius_km="20.00",
+            estimated_distance_km="10.00",
+            vehicle_type_required="pickup",
+            quoted_price="2000.00",
+            status="pending",
+        )
+        self.client.force_login(self.admin)
+
+        response = self.client.post(
+            "/accounts/admin-dashboard/",
+            {
+                "action": "delete-booking",
+                "booking_id": booking.id,
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertFalse(Booking.objects.filter(id=booking.id).exists())
+        self.assertContains(response, f"Booking #{booking.id} deleted.")
 
 
 class CustomUserAuthTests(TestCase):
@@ -113,4 +185,76 @@ class CustomUserAuthTests(TestCase):
 
         response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "System admin dashboard")
+        self.assertContains(response, "System Administration")
+
+    def test_logged_in_user_can_update_account_details_from_dashboard_form(self):
+        user = User.objects.create_user(
+            phone_number="0700000201",
+            email="farmername@example.com",
+            password="StrongPass123",
+            first_name="Old",
+            last_name="Name",
+            role="farmer",
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(
+            "/accounts/profile/",
+            {
+                "first_name": "New",
+                "last_name": "Farmer",
+                "phone_number": "0700000999",
+                "email": "newfarmer@example.com",
+                "next": "/",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        user.refresh_from_db()
+        self.assertEqual(user.first_name, "New")
+        self.assertEqual(user.last_name, "Farmer")
+        self.assertEqual(user.phone_number, "0700000999")
+        self.assertEqual(user.email, "newfarmer@example.com")
+        self.assertContains(response, "Profile updated.")
+
+    def test_profile_update_rejects_duplicate_phone_or_email(self):
+        user = User.objects.create_user(
+            phone_number="0700000201",
+            email="farmername@example.com",
+            password="StrongPass123",
+            first_name="Old",
+            last_name="Name",
+            role="farmer",
+        )
+        User.objects.create_user(
+            phone_number="0700000202",
+            email="taken@example.com",
+            password="StrongPass123",
+            first_name="Taken",
+            last_name="User",
+            role="farmer",
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(
+            "/accounts/profile/",
+            {
+                "first_name": "Old",
+                "last_name": "Name",
+                "phone_number": "0700000202",
+                "email": "taken@example.com",
+                "next": "/",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        user.refresh_from_db()
+        self.assertEqual(user.phone_number, "0700000201")
+        self.assertEqual(user.email, "farmername@example.com")
+        self.assertContains(response, "This phone number is already in use.")
+
+    def test_profile_update_requires_login(self):
+        response = self.client.post("/accounts/profile/", {"first_name": "Nope", "last_name": "User"})
+        self.assertEqual(response.status_code, 302)

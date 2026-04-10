@@ -1,16 +1,37 @@
 from django import forms
+from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm as DjangoAuthenticationForm
 from django.contrib.auth.forms import UserCreationForm, UserChangeForm as BaseUserChangeForm
+from django.core.exceptions import ValidationError
 
 from transporters.models import DEFAULT_TRANSPORT_PRICING, TransportPricing, VehicleType
 
 from .models import CustomUser
 
 
+User = get_user_model()
+
+
 class CustomUserCreationForm(UserCreationForm):
+    ALLOWED_ROLES = ("farmer", "driver")
+
     class Meta:
         model = CustomUser
         fields = ('phone_number', 'email', 'first_name', 'last_name', 'role')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["role"].choices = [
+            (value, label)
+            for value, label in self.fields["role"].choices
+            if value in self.ALLOWED_ROLES
+        ]
+
+    def clean_role(self):
+        role = self.cleaned_data["role"]
+        if role not in self.ALLOWED_ROLES:
+            raise ValidationError("Select a valid account type.")
+        return role
 
 
 class CustomUserChangeForm(BaseUserChangeForm):
@@ -25,6 +46,14 @@ class AuthenticationForm(DjangoAuthenticationForm):
         max_length=150,
         widget=forms.TextInput(attrs={'autofocus': True, 'autocomplete': 'username'}),
     )
+
+    def confirm_login_allowed(self, user):
+        super().confirm_login_allowed(user)
+        if not user.is_staff and not user.is_email_verified:
+            raise ValidationError(
+                "Verify your email address before signing in.",
+                code="email_not_verified",
+            )
 
 
 class ProfileAccountForm(forms.ModelForm):
@@ -44,6 +73,23 @@ class ProfileAccountForm(forms.ModelForm):
         existing = CustomUser.objects.filter(email=email).exclude(id=self.instance.id)
         if existing.exists():
             raise forms.ValidationError("This email address is already in use.")
+        return email
+
+
+class ResendVerificationForm(forms.Form):
+    email = forms.EmailField()
+
+    def clean_email(self):
+        email = self.cleaned_data["email"]
+        try:
+            user = User.objects.get(email=email)
+        except User.DoesNotExist as exc:
+            raise forms.ValidationError("No account was found with that email address.") from exc
+        if user.is_staff:
+            raise forms.ValidationError("This account cannot use email verification resend.")
+        if user.is_email_verified:
+            raise forms.ValidationError("This email address is already verified.")
+        self.user = user
         return email
 
 

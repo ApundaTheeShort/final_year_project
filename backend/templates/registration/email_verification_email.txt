@@ -1,0 +1,7 @@
+Hello {{ user.first_name }},
+
+Verify your email address for {{ site_name }} by opening the link below:
+
+{{ verification_url }}
+
+If you did not create this account, you can ignore this email.

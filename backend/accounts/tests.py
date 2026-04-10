@@ -1,5 +1,10 @@
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.contrib.auth.tokens import default_token_generator
+from django.core import mail
+from django.test import TestCase, override_settings
+from django.urls import reverse
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 
 from booking.models import Booking
 from transporters.models import TransportPricing
@@ -170,6 +175,7 @@ class CustomUserAuthTests(TestCase):
         self.assertTrue(admin.is_superuser)
         self.assertTrue(admin.is_active)
         self.assertEqual(admin.role, "admin")
+        self.assertTrue(admin.is_email_verified)
 
     def test_staff_admin_can_login_and_reach_dashboard(self):
         admin = User.objects.create_superuser(
@@ -258,3 +264,119 @@ class CustomUserAuthTests(TestCase):
     def test_profile_update_requires_login(self):
         response = self.client.post("/accounts/profile/", {"first_name": "Nope", "last_name": "User"})
         self.assertEqual(response.status_code, 302)
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class EmailVerificationFlowTests(TestCase):
+    def test_signup_sends_verification_email_and_redirects(self):
+        response = self.client.post(
+            "/accounts/signup/",
+            {
+                "phone_number": "0700000300",
+                "email": "newuser@example.com",
+                "first_name": "New",
+                "last_name": "User",
+                "role": "farmer",
+                "password1": "StrongPass123",
+                "password2": "StrongPass123",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Verify your email")
+        user = User.objects.get(phone_number="0700000300")
+        self.assertFalse(user.is_email_verified)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("/accounts/verify-email/", mail.outbox[0].body)
+
+    def test_unverified_non_staff_user_cannot_sign_in(self):
+        User.objects.create_user(
+            phone_number="0700000301",
+            email="pending@example.com",
+            password="StrongPass123",
+            first_name="Pending",
+            last_name="User",
+            role="farmer",
+        )
+
+        response = self.client.post(
+            "/accounts/login/",
+            {"username": "0700000301", "password": "StrongPass123"},
+            follow=True,
+        )
+
+        self.assertContains(response, "Verify your email address before signing in.")
+
+    def test_verification_link_marks_user_verified(self):
+        user = User.objects.create_user(
+            phone_number="0700000302",
+            email="verifyme@example.com",
+            password="StrongPass123",
+            first_name="Verify",
+            last_name="Me",
+            role="farmer",
+        )
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+
+        response = self.client.get(reverse("verify-email", kwargs={"uidb64": uid, "token": token}), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        user.refresh_from_db()
+        self.assertTrue(user.is_email_verified)
+        self.assertIsNotNone(user.email_verified_at)
+        self.assertContains(response, "Email verified. You can now sign in.")
+
+    def test_resend_verification_sends_new_email(self):
+        User.objects.create_user(
+            phone_number="0700000303",
+            email="resend@example.com",
+            password="StrongPass123",
+            first_name="Resend",
+            last_name="User",
+            role="driver",
+        )
+
+        response = self.client.post(
+            reverse("resend-verification"),
+            {"email": "resend@example.com"},
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Verify your email")
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("resend@example.com", mail.outbox[0].to)
+
+    def test_email_change_requires_reverification_and_sends_email(self):
+        user = User.objects.create_user(
+            phone_number="0700000304",
+            email="verified@example.com",
+            password="StrongPass123",
+            first_name="Verified",
+            last_name="User",
+            role="farmer",
+            is_email_verified=True,
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(
+            "/accounts/profile/",
+            {
+                "first_name": "Verified",
+                "last_name": "User",
+                "phone_number": "0700000304",
+                "email": "changed@example.com",
+                "next": "/",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        user.refresh_from_db()
+        self.assertEqual(user.email, "changed@example.com")
+        self.assertFalse(user.is_email_verified)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("changed@example.com", mail.outbox[0].to)
+        self.assertContains(response, "Verify your email")

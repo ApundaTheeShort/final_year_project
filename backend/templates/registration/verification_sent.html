@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}Verify Your Email | FreshHaul{% endblock %}
+
+{% block content %}
+<div style="text-align: center; max-width: 640px; margin: 0 auto;">
+    <h1>Verify your email</h1>
+    <p>We sent a verification link to your email address. Open that link to activate sign in and password recovery for your account.</p>
+    <p style="color: var(--muted);">If you do not see it, check spam or request another verification email.</p>
+    <div class="links">
+        <a href="{% url 'resend-verification' %}">Resend verification email</a>
+        <a href="{% url 'login' %}">Back to sign in</a>
+    </div>
+</div>
+{% endblock %}

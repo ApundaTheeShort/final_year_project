@@ -155,34 +155,18 @@
                 <p class="muted" style="margin: 0; font-size: 0.9rem;">Update specifications to match with incoming transport requests.</p>
             </div>
         </div>
-        
-        <form id="vehicle-form" class="stack">
-            <label>Registration Number
-                <input name="registration_number" placeholder="e.g. KCA 123G" required style="padding: 1rem; font-size: 1.05rem; margin-top: 0.5rem;">
-            </label>
-            <div class="grid grid-2" style="gap: 1.5rem;">
-                <label>Vehicle Type
-                    <select name="vehicle_type" required style="padding: 1rem; font-size: 1.05rem; margin-top: 0.5rem;">
-                        <option value="motorbike">Motorbike</option>
-                        <option value="pickup">Pickup</option>
-                        <option value="van">Van</option>
-                        <option value="truck">Truck</option>
-                    </select>
-                </label>
-                <label>Max Capacity (kg)
-                    <input name="capacity_kg" type="number" step="0.01" min="0.01" required style="padding: 1rem; font-size: 1.05rem; margin-top: 0.5rem;">
-                </label>
-            </div>
-            <label style="margin-top: 0.5rem;">Dispatch Availability
-                <select name="is_available" required style="padding: 1rem; font-size: 1.05rem; margin-top: 0.5rem;">
-                    <option value="true">Available for Dispatch</option>
-                    <option value="false">Busy / Offline</option>
-                </select>
-            </label>
-            <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
-                <button type="submit" class="btn" style="padding: 1rem 2.5rem; font-size: 1.1rem; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);">Save Vehicle Profile</button>
-            </div>
-        </form>
+
+        <div id="vehicle-summary" class="stack" style="gap: 1rem; font-size: 1.05rem; background: #f8fafc; padding: 1.5rem; border: 1px solid var(--border); border-radius: var(--radius-md);">
+            <p style="margin: 0;"><strong>Registration:</strong> <span id="vehicle-summary-registration">Not set</span></p>
+            <p style="margin: 0;"><strong>Vehicle Type:</strong> <span id="vehicle-summary-type">Not set</span></p>
+            <p style="margin: 0;"><strong>Capacity:</strong> <span id="vehicle-summary-capacity">Not set</span></p>
+            <p style="margin: 0;"><strong>Dispatch Availability:</strong> <span id="vehicle-summary-availability">Not set</span></p>
+        </div>
+
+        <div style="display: flex; justify-content: flex-end; margin-top: 1rem;">
+            <button type="button" class="btn btn-outline" id="open-vehicle-modal">Update Vehicle</button>
+        </div>
+
         <p id="vehicle-message" class="message" style="margin-top: 1.5rem;" hidden></p>
     </section>
 </div>
@@ -252,6 +236,42 @@
             </div>
             <div style="display: flex; justify-content: flex-end;">
                 <button type="submit" class="btn">Save Account Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div id="vehicle-modal" class="modal-backdrop" hidden>
+    <div class="modal-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3 style="margin: 0;">Update Vehicle</h3>
+            <button type="button" class="btn btn-outline" id="close-vehicle-modal">Close</button>
+        </div>
+        <form id="vehicle-form" class="stack">
+            <label>Registration Number
+                <input name="registration_number" placeholder="e.g. KCA 123G" required style="padding: 1rem; font-size: 1.05rem; margin-top: 0.5rem;">
+            </label>
+            <div class="grid grid-2" style="gap: 1.5rem;">
+                <label>Vehicle Type
+                    <select name="vehicle_type" required style="padding: 1rem; font-size: 1.05rem; margin-top: 0.5rem;">
+                        <option value="motorbike">Motorbike</option>
+                        <option value="pickup">Pickup</option>
+                        <option value="van">Van</option>
+                        <option value="truck">Truck</option>
+                    </select>
+                </label>
+                <label>Max Capacity (kg)
+                    <input name="capacity_kg" type="number" step="0.01" min="0.01" required style="padding: 1rem; font-size: 1.05rem; margin-top: 0.5rem;">
+                </label>
+            </div>
+            <label style="margin-top: 0.5rem;">Dispatch Availability
+                <select name="is_available" required style="padding: 1rem; font-size: 1.05rem; margin-top: 0.5rem;">
+                    <option value="true">Available for Dispatch</option>
+                    <option value="false">Busy / Offline</option>
+                </select>
+            </label>
+            <div style="display: flex; justify-content: flex-end;">
+                <button type="submit" class="btn">Save Vehicle Changes</button>
             </div>
         </form>
     </div>
@@ -543,14 +563,37 @@
 
     function populateVehicleForm() {
         const vehicle = getPrimaryVehicle();
+        const form = document.getElementById("vehicle-form");
         if (!vehicle) {
+            form.reset();
+            form.querySelector('[name="vehicle_type"]').value = "pickup";
+            form.querySelector('[name="is_available"]').value = "true";
             return;
         }
-        const form = document.getElementById("vehicle-form");
         form.querySelector('[name="registration_number"]').value = vehicle.registration_number || "";
         form.querySelector('[name="vehicle_type"]').value = vehicle.vehicle_type || "pickup";
         form.querySelector('[name="capacity_kg"]').value = vehicle.capacity_kg || "";
         form.querySelector('[name="is_available"]').value = vehicle.is_available ? "true" : "false";
+    }
+
+    function formatVehicleType(vehicleType) {
+        const labels = {
+            motorbike: "Motorbike",
+            pickup: "Pickup",
+            van: "Van",
+            truck: "Truck",
+        };
+        return labels[vehicleType] || "Not set";
+    }
+
+    function populateVehicleSummary() {
+        const vehicle = getPrimaryVehicle();
+        document.getElementById("vehicle-summary-registration").textContent = vehicle?.registration_number || "Not set";
+        document.getElementById("vehicle-summary-type").textContent = formatVehicleType(vehicle?.vehicle_type);
+        document.getElementById("vehicle-summary-capacity").textContent = vehicle?.capacity_kg ? `${vehicle.capacity_kg} kg` : "Not set";
+        document.getElementById("vehicle-summary-availability").textContent = vehicle
+            ? (vehicle.is_available ? "Available for Dispatch" : "Busy / Offline")
+            : "Not set";
     }
 
     function renderSelectedBooking() {
@@ -740,6 +783,7 @@
     async function loadSetup() {
         state.setup = await apiRequest("/api/transporters/me/", {method: "GET"});
         populateVehicleForm();
+        populateVehicleSummary();
     }
 
     async function loadOpenBookings() {
@@ -875,6 +919,7 @@
             });
             showMessage(message, "Vehicle details updated.");
             await refreshDashboard();
+            document.getElementById("vehicle-modal").hidden = true;
         } catch (error) {
             showMessage(message, error.message, true);
         }
@@ -936,6 +981,18 @@
     document.getElementById("reload-open-bookings").addEventListener("click", refreshDashboard);
     document.getElementById("reload-assigned-bookings").addEventListener("click", refreshDashboard);
     document.getElementById("recenter-dispatch-map").addEventListener("click", recenterDispatchMap);
+    document.getElementById("open-vehicle-modal").addEventListener("click", () => {
+        populateVehicleForm();
+        document.getElementById("vehicle-modal").hidden = false;
+    });
+    document.getElementById("close-vehicle-modal").addEventListener("click", () => {
+        document.getElementById("vehicle-modal").hidden = true;
+    });
+    document.getElementById("vehicle-modal").addEventListener("click", (event) => {
+        if (event.target.id === "vehicle-modal") {
+            document.getElementById("vehicle-modal").hidden = true;
+        }
+    });
     document.getElementById("open-profile-modal").addEventListener("click", () => {
         document.getElementById("profile-modal").hidden = false;
     });

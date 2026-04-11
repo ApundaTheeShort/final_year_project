@@ -94,7 +94,6 @@
     <button type="button" class="tab-btn" onclick="switchTab('profile')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Vehicle Profile</button>
     <button type="button" class="tab-btn" onclick="switchTab('account')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Account Profile</button>
 </div>
-
 <!-- Tab 1: Job Board -->
 <div id="tab-jobs" class="tab-content" style="display: block;">
     <div class="stack" style="max-width: 1000px; margin: 0 auto; gap: 2rem;">
@@ -115,7 +114,6 @@
         </section>
     </div>
 </div>
-
 <!-- Tab 2: Active Routing Map -->
 <div id="tab-route" class="tab-content" style="display: none;">
     <div class="dashboard-layout">
@@ -341,36 +339,54 @@
 
     function extractErrorMessage(payload) {
         if (!payload) {
-            return "Request failed.";
+            return "Something went wrong. Please try again.";
         }
         if (typeof payload === "string") {
-            return payload;
+            return normalizeUserMessage(payload);
         }
         if (Array.isArray(payload)) {
-            return payload[0] || "Request failed.";
+            return normalizeUserMessage(payload[0] || "Something went wrong. Please try again.");
         }
         if (payload.non_field_errors?.length) {
-            return payload.non_field_errors[0];
+            return normalizeUserMessage(payload.non_field_errors[0]);
         }
         if (payload.detail) {
-            return payload.detail;
+            return normalizeUserMessage(payload.detail);
         }
 
         for (const value of Object.values(payload)) {
             if (Array.isArray(value) && value.length) {
                 if (typeof value[0] === "string") {
-                    return value[0];
+                    return normalizeUserMessage(value[0]);
                 }
                 return extractErrorMessage(value[0]);
             }
             if (typeof value === "string" && value) {
-                return value;
+                return normalizeUserMessage(value);
             }
             if (value && typeof value === "object") {
                 return extractErrorMessage(value);
             }
         }
-        return "Request failed.";
+        return "Something went wrong. Please try again.";
+    }
+
+    function normalizeUserMessage(message) {
+        const text = String(message || "").trim();
+        if (!text) {
+            return "Something went wrong. Please try again.";
+        }
+        const lowered = text.toLowerCase();
+        if (lowered.includes("request failed")) {
+            return "Something went wrong. Please try again.";
+        }
+        if (lowered.includes("invalid status transition")) {
+            return "That update is not available for this delivery right now.";
+        }
+        if (lowered.includes("live location is required")) {
+            return "Turn on location access before updating this delivery.";
+        }
+        return text;
     }
 
     function safeLatLng(latitude, longitude) {

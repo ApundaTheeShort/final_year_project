@@ -27,6 +27,7 @@ Notes:
 - Changing the account email triggers a new verification email.
 - `BasicAuthentication` and token auth are not used by default.
 - Most API endpoints require an authenticated user and are throttled by DRF.
+- Payment is initiated separately through the M-Pesa STK push endpoint after booking creation.
 
 ## Roles
 
@@ -49,6 +50,8 @@ Notes:
 - Farmers do not provide a search radius.
 - The system automatically searches outward for matching drivers.
 - Farmers can delete only `pending` bookings.
+- Farmers can delete only `pending_payment` bookings.
+- Farmers must pay the quoted amount before a booking becomes driver-visible.
 - Drivers can accept only matching bookings for their available vehicle.
 - Drivers can mark `picked_up` only after arriving at pickup.
 - Drivers can mark `delivered` only after arriving at dropoff.
@@ -57,12 +60,14 @@ Notes:
 
 ## Booking Status Values
 
-- `pending`
+- `pending_payment`
+- `confirmed`
 - `accepted`
 - `declined`
 - `picked_up`
 - `in_transit`
 - `delivered`
+- `completed`
 - `cancelled`
 
 ## Bookings
@@ -123,6 +128,7 @@ Response includes:
 - route geometry
 - vehicle type required
 - quoted price
+- booking `payment_status`
 - system-selected search radius
 - matched transporters
 
@@ -153,7 +159,8 @@ Example response:
   },
   "vehicle_type_required": "pickup",
   "quoted_price": "2480.00",
-  "status": "pending",
+  "status": "pending_payment",
+  "payment_status": "unpaid",
   "matched_transporters": [
     {
       "transporter_id": 7,
@@ -239,7 +246,7 @@ Role:
 
 - `farmer`
 
-Allowed only when booking status is `pending`.
+Allowed only when booking status is `pending_payment`.
 
 Successful response:
 
@@ -260,6 +267,8 @@ Notes:
 
 - Farmers use this for live tracking after booking acceptance.
 - Drivers use this for assigned-trip route and progress display.
+- The planned route can be shown before pickup starts.
+- Live driver position is intended to become meaningful after pickup has started.
 
 ### Update Booking Status
 
@@ -289,6 +298,7 @@ Notes:
 
 - `in_transit` is not manually posted by the driver.
 - Pickup and delivery are location-gated by backend validation.
+- Delivery triggers automatic release of held payment when eligible.
 
 Successful response example:
 
@@ -319,6 +329,59 @@ Request body:
   "notes": "Automatic live location update"
 }
 ```
+
+### Get Booking Payment Snapshot
+
+`GET /api/bookings/<booking_id>/payment-status/`
+
+Roles:
+
+- `farmer` for own booking
+- assigned `driver`
+- `admin`
+
+Returns booking status, payment status, and nested payment details where available.
+
+### Start STK Push
+
+`POST /api/payments/stk-push/`
+
+Role:
+
+- `farmer`
+
+Request body:
+
+```json
+{
+  "booking_id": 12,
+  "phone_number": "0712345678"
+}
+```
+
+Rules:
+
+- booking must belong to the authenticated farmer
+- amount comes from `quoted_price`, not the request body
+- duplicate successful payment is blocked
+- cancelled bookings cannot be paid
+
+Success response includes a message telling the frontend to prompt the user to complete payment on their phone.
+
+### M-Pesa Callback
+
+`POST /api/payments/mpesa/callback/`
+
+Role:
+
+- public callback endpoint used by Daraja
+
+Notes:
+
+- callback matching is done by `CheckoutRequestID` and `MerchantRequestID`
+- callback handling is idempotent
+- successful callback moves payment to `paid_held` and booking to `confirmed`
+- failed callback leaves booking unpaid
 
 Notes:
 
@@ -387,6 +450,7 @@ Request body:
 
 Notes:
 
+- The booking must already be paid and `confirmed`.
 - The selected vehicle must belong to the driver.
 - The selected vehicle must be available.
 - The selected vehicle must match required type and capacity.
@@ -571,6 +635,107 @@ Request body:
 {
   "current_latitude": "-1.292100",
   "current_longitude": "36.821900"
+}
+```
+
+## Payments
+
+### Initiate STK Push
+
+`POST /api/payments/stk-push/`
+
+Role:
+
+- `farmer`
+
+Request body:
+
+```json
+{
+  "booking_id": 12,
+  "phone_number": "0712345678"
+}
+```
+
+Notes:
+
+- The amount is taken from `booking.quoted_price`, not user input.
+- Duplicate successful payment attempts are blocked.
+- Cancelled bookings cannot be paid.
+
+Example response:
+
+```json
+{
+  "payment": {
+    "id": 5,
+    "booking": 12,
+    "amount_kes": "2480.00",
+    "phone_number": "254712345678",
+    "status": "stk_push_sent"
+  },
+  "daraja": {
+    "MerchantRequestID": "29115-34620561-1",
+    "CheckoutRequestID": "ws_CO_191220191020363925",
+    "ResponseDescription": "Success. Request accepted for processing"
+  },
+  "message": "STK push sent. Complete payment on your phone."
+}
+```
+
+### Daraja Callback
+
+`POST /api/payments/mpesa/callback/`
+
+Role:
+
+- callback endpoint for Safaricom Daraja
+
+On success:
+
+- payment becomes `paid_held`
+- booking becomes `confirmed`
+- payout becomes `pending_release`
+
+On delivery release:
+
+- payment becomes `released`
+- payout becomes `released`
+
+### Get Payment Detail
+
+`GET /api/payments/<id>/`
+
+Roles:
+
+- related `farmer`
+- related `driver`
+- `admin`
+
+### Get Booking Payment Status
+
+`GET /api/bookings/<booking_id>/payment-status/`
+
+Roles:
+
+- related `farmer`
+- related `driver`
+- `admin`
+
+Example response:
+
+```json
+{
+  "id": 12,
+  "status": "confirmed",
+  "payment_status": "paid",
+  "quoted_price": "2480.00",
+  "payment": {
+    "id": 5,
+    "amount_kes": "2480.00",
+    "status": "paid_held",
+    "mpesa_receipt_number": "R123XYZ"
+  }
 }
 ```
 

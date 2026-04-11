@@ -4,6 +4,7 @@ from rest_framework import generics, permissions, response, serializers, status
 from rest_framework.views import APIView
 
 from transporters.models import Vehicle
+from payments.serializers import BookingPaymentStatusSerializer
 
 from .matching import progressive_transporter_matches
 from .models import Booking, BookingStatus
@@ -62,9 +63,9 @@ class BookingDetailView(generics.RetrieveDestroyAPIView):
     def destroy(self, request, *args, **kwargs):
         booking = self.get_object()
         if booking.farmer != request.user:
-            return response.Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
-        if booking.status != BookingStatus.PENDING:
-            raise serializers.ValidationError("Only pending bookings can be deleted by the farmer.")
+            return response.Response({"detail": "We could not find that booking."}, status=status.HTTP_404_NOT_FOUND)
+        if booking.status != BookingStatus.PENDING_PAYMENT:
+            raise serializers.ValidationError("Only unpaid bookings can be removed. Create a new booking if details have changed.")
         booking.delete()
         return response.Response(status=status.HTTP_204_NO_CONTENT)
 
@@ -84,7 +85,7 @@ class DriverOpenBookingsView(generics.ListAPIView):
 
     def get_queryset(self):
         pending_bookings = Booking.objects.filter(
-            status=BookingStatus.PENDING,
+            status=BookingStatus.CONFIRMED,
             vehicle_type_required__in=Vehicle.objects.filter(
                 transporter__user=self.request.user,
                 is_available=True,
@@ -139,6 +140,20 @@ class BookingStatusUpdateView(APIView):
         return response.Response(BookingDetailSerializer(booking).data)
 
 
+class BookingMarkDeliveredView(APIView):
+    permission_classes = [permissions.IsAuthenticated, IsDriver]
+
+    def post(self, request, booking_id):
+        booking = get_object_or_404(Booking, id=booking_id, transporter=request.user)
+        serializer = BookingStatusUpdateSerializer(
+            data={"status": BookingStatus.DELIVERED},
+            context={"request": request, "booking": booking},
+        )
+        serializer.is_valid(raise_exception=True)
+        booking = serializer.save()
+        return response.Response(BookingDetailSerializer(booking).data)
+
+
 class TrackingUpdateView(APIView):
     permission_classes = [permissions.IsAuthenticated, IsDriver]
 
@@ -162,5 +177,18 @@ class BookingTrackingView(APIView):
             id=booking_id,
         )
         if request.user not in {booking.farmer, booking.transporter}:
-            return response.Response({"detail": "Not found."}, status=status.HTTP_404_NOT_FOUND)
+            return response.Response({"detail": "We could not find that booking."}, status=status.HTTP_404_NOT_FOUND)
         return response.Response(BookingDetailSerializer(booking).data)
+
+
+class BookingPaymentStatusView(APIView):
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get(self, request, booking_id):
+        booking = get_object_or_404(
+            Booking.objects.select_related("payment", "payment__payout"),
+            id=booking_id,
+        )
+        if not request.user.is_staff and request.user not in {booking.farmer, booking.transporter}:
+            return response.Response({"detail": "We could not find that booking."}, status=status.HTTP_404_NOT_FOUND)
+        return response.Response(BookingPaymentStatusSerializer(booking).data)

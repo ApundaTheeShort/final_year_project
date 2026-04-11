@@ -4,7 +4,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase
 from rest_framework.test import APIClient
 
-from .models import BookingStatus
+from .models import Booking, BookingPaymentStatus, BookingStatus
 from transporters.models import TransportPricing, TransporterProfile, Vehicle
 
 
@@ -69,6 +69,13 @@ class BookingFlowTests(TestCase):
             defaults={"price_per_km": "200.00"},
         )
 
+    def mark_booking_paid(self, booking_id):
+        booking = Booking.objects.get(id=booking_id)
+        booking.status = BookingStatus.CONFIRMED
+        booking.payment_status = BookingPaymentStatus.PAID
+        booking.save(update_fields=["status", "payment_status", "updated_at"])
+        return booking
+
     @patch("booking.serializers.get_route_details")
     def test_farmer_booking_matches_driver_and_full_tracking_flow(self, mocked_route):
         mocked_route.return_value = {
@@ -111,9 +118,12 @@ class BookingFlowTests(TestCase):
         self.assertEqual(create_response.data["estimated_distance_km"], "12.40")
         self.assertEqual(create_response.data["search_radius_km"], "50.00")
         self.assertEqual(create_response.data["quoted_price"], "2480.00")
+        self.assertEqual(create_response.data["status"], BookingStatus.PENDING_PAYMENT)
+        self.assertEqual(create_response.data["payment_status"], BookingPaymentStatus.UNPAID)
         self.assertEqual(len(create_response.data["matched_transporters"]), 2)
         self.assertEqual(create_response.data["matched_transporters"][0]["estimated_price"], "2480.00")
         booking_id = create_response.data["id"]
+        self.mark_booking_paid(booking_id)
 
         self.client.force_authenticate(self.driver)
         decision_response = self.client.post(
@@ -214,6 +224,7 @@ class BookingFlowTests(TestCase):
             format="json",
         )
         booking_id = create_response.data["id"]
+        self.mark_booking_paid(booking_id)
 
         self.client.force_authenticate(self.driver)
         accept_response = self.client.post(
@@ -305,6 +316,7 @@ class BookingFlowTests(TestCase):
             format="json",
         )
         accepted_booking_id = accepted_response.data["id"]
+        self.mark_booking_paid(accepted_booking_id)
 
         self.client.force_authenticate(self.driver)
         self.client.post(
@@ -359,6 +371,7 @@ class BookingFlowTests(TestCase):
             format="json",
         )
         booking_id = create_response.data["id"]
+        self.mark_booking_paid(booking_id)
 
         self.client.force_authenticate(self.driver)
         near_response = self.client.get("/api/bookings/driver/open/")
@@ -414,6 +427,7 @@ class BookingFlowTests(TestCase):
             format="json",
         )
         booking_id = create_response.data["id"]
+        self.mark_booking_paid(booking_id)
 
         self.client.force_authenticate(self.driver)
         response = self.client.get("/api/bookings/driver/open/")
@@ -461,6 +475,7 @@ class BookingFlowTests(TestCase):
             format="json",
         )
         booking_id = create_response.data["id"]
+        self.mark_booking_paid(booking_id)
 
         self.client.force_authenticate(self.driver)
         accept_response = self.client.post(

@@ -10,6 +10,7 @@ from transporters.serializers import TransporterProfileSerializer, VehicleSerial
 from .matching import progressive_transporter_matches
 from .models import (
     Booking,
+    BookingPaymentStatus,
     BookingStatus,
     BookingStatusHistory,
     TrackingUpdate,
@@ -60,6 +61,7 @@ class BookingCreateSerializer(serializers.ModelSerializer):
             "vehicle_type_required",
             "quoted_price",
             "status",
+            "payment_status",
             "matched_transporters",
         )
         read_only_fields = (
@@ -80,6 +82,7 @@ class BookingCreateSerializer(serializers.ModelSerializer):
             "vehicle_type_required",
             "quoted_price",
             "status",
+            "payment_status",
             "matched_transporters",
         )
 
@@ -116,6 +119,8 @@ class BookingCreateSerializer(serializers.ModelSerializer):
             route_geometry=route["geometry"],
             quoted_price=quoted_price,
             search_radius_km="0.00",
+            status=BookingStatus.PENDING_PAYMENT,
+            payment_status=BookingPaymentStatus.UNPAID,
             **validated_data,
         )
         _, selected_radius = progressive_transporter_matches(booking)
@@ -123,9 +128,9 @@ class BookingCreateSerializer(serializers.ModelSerializer):
         booking.save()
         BookingStatusHistory.objects.create(
             booking=booking,
-            status=BookingStatus.PENDING,
+            status=BookingStatus.PENDING_PAYMENT,
             created_by=self.context["request"].user,
-            notes="Booking created",
+            notes="Booking created and waiting for payment confirmation.",
         )
         return booking
 
@@ -182,6 +187,7 @@ class BookingDetailSerializer(serializers.ModelSerializer):
             "vehicle_type_required",
             "quoted_price",
             "status",
+            "payment_status",
             "transporter",
             "vehicle",
             "accepted_at",
@@ -223,17 +229,19 @@ class BookingDecisionSerializer(serializers.Serializer):
         try:
             booking = Booking.objects.get(id=attrs["booking_id"])
         except Booking.DoesNotExist as exc:
-            raise serializers.ValidationError({"booking_id": "Booking not found."}) from exc
+            raise serializers.ValidationError({"booking_id": "We could not find that booking."}) from exc
         request = self.context["request"]
         attrs["booking"] = booking
 
         if attrs["action"] == "accept":
-            if booking.status != BookingStatus.PENDING:
-                raise serializers.ValidationError("Only pending bookings can be accepted.")
+            if booking.status != BookingStatus.CONFIRMED:
+                raise serializers.ValidationError("This job is not ready to be accepted yet.")
+            if booking.payment_status != BookingPaymentStatus.PAID:
+                raise serializers.ValidationError("The farmer still needs to complete payment before you can accept this job.")
             if "vehicle_id" not in attrs:
-                raise serializers.ValidationError({"vehicle_id": "This field is required when accepting a booking."})
+                raise serializers.ValidationError({"vehicle_id": "Select a vehicle before accepting this job."})
             if not self.context["booking_matcher"](booking, request.user):
-                raise serializers.ValidationError("This booking is outside the configured search radius for this driver.")
+                raise serializers.ValidationError("This job is not available for your current dispatch area.")
 
             try:
                 vehicle = Vehicle.objects.get(
@@ -242,11 +250,11 @@ class BookingDecisionSerializer(serializers.Serializer):
                     is_available=True,
                 )
             except Vehicle.DoesNotExist as exc:
-                raise serializers.ValidationError({"vehicle_id": "Vehicle not found or unavailable."}) from exc
+                raise serializers.ValidationError({"vehicle_id": "That vehicle is not available right now."}) from exc
             if vehicle.vehicle_type != booking.vehicle_type_required:
-                raise serializers.ValidationError("Vehicle type does not match booking requirements.")
+                raise serializers.ValidationError("Choose a vehicle that matches this delivery request.")
             if not vehicle.can_carry(booking.weight_kg):
-                raise serializers.ValidationError("Vehicle capacity is too small for this booking.")
+                raise serializers.ValidationError("Choose a vehicle that can carry this load.")
             attrs["vehicle"] = vehicle
         return attrs
 
@@ -282,6 +290,19 @@ class BookingDecisionSerializer(serializers.Serializer):
             created_by=user,
             notes="Booking accepted by transporter",
         )
+        if hasattr(booking, "payment"):
+            payment = booking.payment
+            changed = []
+            if payment.transporter_id != user.id:
+                payment.transporter = user
+                changed.append("transporter")
+            if changed:
+                payment.save(update_fields=[*changed, "updated_at"])
+            if hasattr(payment, "payout"):
+                payout = payment.payout
+                if payout.transporter_id != user.id:
+                    payout.transporter = user
+                    payout.save(update_fields=["transporter", "updated_at"])
         return booking
 
 
@@ -301,7 +322,7 @@ class BookingStatusUpdateSerializer(serializers.Serializer):
         }
         expected = valid_transitions.get(booking.status)
         if expected != value:
-            raise serializers.ValidationError(f"Invalid status transition from {booking.status} to {value}.")
+            raise serializers.ValidationError("That update is not available for this delivery right now.")
         return value
 
     def validate(self, attrs):
@@ -314,7 +335,7 @@ class BookingStatusUpdateSerializer(serializers.Serializer):
             or transporter_profile.current_latitude is None
             or transporter_profile.current_longitude is None
         ):
-            raise serializers.ValidationError("Your live location is required before updating this booking status.")
+            raise serializers.ValidationError("Turn on location access before updating this delivery.")
 
         if attrs["status"] == BookingStatus.PICKED_UP:
             target_latitude = booking.pickup_latitude

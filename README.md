@@ -6,6 +6,7 @@ Produce transport coordination platform built with Django. Farmers create transp
 
 - Farmers choose pickup and dropoff points from a map or place search.
 - The system calculates route distance and duration using map services.
+- Farmers pay quoted transport charges through M-Pesa STK Push at booking time.
 - Transporter discovery is automatic and expands from nearby drivers outward.
 - Farmers can delete incorrect pending bookings and create a new one.
 - Transporters can edit vehicle details, accept jobs, mark pickup and delivery at the correct location, and share live location.
@@ -19,12 +20,14 @@ Produce transport coordination platform built with Django. Farmers create transp
 - Farmers do not choose a transporter search radius.
 - The system automatically searches outward from nearby drivers to farther matching drivers.
 - Farmers cannot edit bookings. Wrong pending bookings must be deleted and recreated.
-- Farmers can delete only `pending` bookings.
+- Farmers can delete only `pending_payment` bookings.
 - Drivers can only mark `picked_up` after arriving at pickup.
 - Drivers can only mark `delivered` after arriving at dropoff.
 - `in_transit` is automatic after the driver leaves pickup with the goods.
 - Farmer live driver tracking becomes visible only after pickup starts.
 - Admin controls transport pricing by vehicle type.
+- Daraja sandbox payments use application-level escrow simulation:
+  farmer pays first, payment is held in system records, and it is released to the transporter only after delivery is marked complete.
 
 ## User Roles
 
@@ -39,12 +42,15 @@ Produce transport coordination platform built with Django. Farmers create transp
 
 1. Farmer selects pickup and dropoff on the map.
 2. System creates the booking and calculates quote and route.
-3. Matching transporters see the booking in their dashboard.
-4. A driver accepts the booking.
-5. Driver marks `picked_up` only after arriving at pickup.
-6. System switches the booking to `in_transit` automatically once the driver leaves pickup.
-7. Driver marks `delivered` only after arriving at dropoff.
-8. Farmer receives status popups and can track the route live.
+3. Farmer completes M-Pesa STK Push for the quoted amount.
+4. System marks the booking `CONFIRMED` and holds the payment in application escrow.
+5. Matching transporters see the booking in their dashboard.
+6. A driver accepts the booking.
+7. Driver marks `picked_up` only after arriving at pickup.
+8. System switches the booking to `in_transit` automatically once the driver leaves pickup.
+9. Driver marks `delivered` only after arriving at dropoff.
+10. System releases the held payment to the transporter in internal payout records.
+11. Farmer receives status popups and can track the route live.
 
 ## Authentication And Security
 
@@ -84,6 +90,10 @@ Rates can be updated in the app at:
   Resend verification link.
 - `/accounts/admin-dashboard/`
   Staff/admin dashboard for rates and revenue.
+- `/accounts/password_reset/`
+  Password reset request page.
+- `/api/payments/stk-push/`
+  Initiate M-Pesa STK Push for a booking.
 - `/admin/`
   Django admin site for staff users.
 
@@ -111,11 +121,15 @@ final_year_project/
 - `GET /api/bookings/`
   Farmer booking list.
 - `POST /api/bookings/`
-  Create booking.
+  Create booking in `PENDING_PAYMENT`.
 - `GET /api/bookings/<id>/`
   Booking detail.
 - `DELETE /api/bookings/<id>/`
-  Delete pending booking as farmer.
+  Delete unpaid booking as farmer.
+- `GET /api/bookings/<id>/payment-status/`
+  Booking and payment status snapshot.
+- `POST /api/bookings/<id>/mark-delivered/`
+  Driver delivery action alias that also triggers payout release logic.
 - `GET /api/bookings/<id>/tracking/`
   Booking tracking detail for farmer or assigned driver.
 - `POST /api/bookings/<id>/status/`
@@ -144,6 +158,17 @@ final_year_project/
   Save driver vehicle/profile setup.
 - `PATCH /api/transporters/me/location/`
   Update live location.
+
+### Payments
+
+- `POST /api/payments/stk-push/`
+  Start M-Pesa STK Push for a booking using the booking quote amount.
+- `POST /api/payments/mpesa/callback/`
+  Daraja callback endpoint.
+- `GET /api/payments/<id>/`
+  Payment detail for the related farmer, transporter, or admin.
+- `GET /api/payments/bookings/<booking_id>/status/`
+  Payment snapshot for a booking.
 
 ## Example API Payloads
 
@@ -179,6 +204,8 @@ final_year_project/
 }
 ```
 
+After booking creation, the farmer completes payment from the dashboard payment modal. The booking remains `pending_payment` until the Daraja callback confirms payment.
+
 ### Driver Accept Booking
 
 `POST /api/bookings/driver/decision/`
@@ -188,6 +215,17 @@ final_year_project/
   "booking_id": 12,
   "vehicle_id": 4,
   "action": "accept"
+}
+```
+
+### Start Booking Payment
+
+`POST /api/payments/stk-push/`
+
+```json
+{
+  "booking_id": 12,
+  "phone_number": "0712345678"
 }
 ```
 
@@ -225,6 +263,31 @@ final_year_project/
 ```
 
 ## Tech Stack
+
+- Django
+- Django REST Framework
+- PostgreSQL
+- Leaflet
+- OpenStreetMap / Nominatim / OSRM
+- Safaricom Daraja sandbox
+- SMTP / Brevo-ready email delivery
+
+## Email And Auth Flow
+
+1. User signs up as `farmer` or `driver`.
+2. The system sends an email verification link.
+3. Non-staff users must verify their email before signing in.
+4. Password reset is available through the email-based reset flow.
+5. If a user changes their email address from the dashboard, verification is required again.
+
+## Payment Flow
+
+1. Farmer creates a booking from the map.
+2. The system calculates the route and quote.
+3. Farmer starts M-Pesa STK Push from the farmer dashboard.
+4. Successful callback marks payment as held and booking as `confirmed`.
+5. Matching drivers can then see and accept the booking.
+6. When delivery is completed, the held payment is released in system payout records.
 
 - Django 6
 - Django REST Framework
@@ -273,6 +336,7 @@ Common optional groups:
 - Maps: `MAPS_USER_AGENT`, `MAPS_TIMEOUT_SECONDS`, `NOMINATIM_SEARCH_URL`, `NOMINATIM_LOOKUP_URL`, `NOMINATIM_REVERSE_URL`, `OSRM_BASE_URL`
 - Email: `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_HOST_USER`, `EMAIL_HOST_PASSWORD`, `EMAIL_USE_TLS`, `DEFAULT_FROM_EMAIL`
 - Security: `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `USE_SECURE_COOKIES`, `SECURE_SSL_REDIRECT`, `ENABLE_HSTS`
+- Daraja: `MPESA_ENV`, `MPESA_CONSUMER_KEY`, `MPESA_CONSUMER_SECRET`, `MPESA_SHORTCODE`, `MPESA_PASSKEY`, `MPESA_CALLBACK_URL`
 
 ## Run Locally
 
@@ -317,6 +381,7 @@ The Docker `web` service now runs migrations automatically before starting the D
 - If map usage grows, consider self-hosting or replacing public Nominatim/OSRM endpoints.
 - Serve static files through a proper web server or static file pipeline.
 - Use a verified Brevo sender/domain before enabling real email delivery.
+- Use Daraja sandbox credentials and a reachable callback URL when testing payments.
 
 ## Create Admin User
 
@@ -359,10 +424,11 @@ DJANGO_SECRET_KEY=test-secret-key ../.venv/bin/python manage.py test booking.tes
 1. Log in as a farmer.
 2. Verify email first if this is a new account.
 3. Select pickup and dropoff on the map.
-4. Enter produce details and create booking.
-5. Wait for a driver to accept.
-6. Use `Track live` to follow the delivery route.
-7. If a pending booking is wrong, delete it and create a new one.
+4. Enter produce details and M-Pesa phone number.
+5. Create the booking and complete the STK push.
+6. Wait for a driver to accept.
+7. Use `Track live` to follow the delivery route.
+8. If an unpaid booking is wrong, delete it and create a new one.
 
 ### Driver Flow
 
@@ -389,6 +455,7 @@ DJANGO_SECRET_KEY=test-secret-key ../.venv/bin/python manage.py test booking.tes
 - Public map providers may rate-limit heavy traffic if left on default hosted endpoints.
 - The UI is designed for operational use and intentionally hides low-level tracking/status internals from users.
 - Real email delivery depends on valid SMTP credentials and a verified sender/domain.
+- Daraja sandbox does not implement true escrow. Release is simulated in application records when delivery is completed.
 
 ## Troubleshooting
 
@@ -396,6 +463,8 @@ DJANGO_SECRET_KEY=test-secret-key ../.venv/bin/python manage.py test booking.tes
   Set `DJANGO_SECRET_KEY` before running the backend.
 - Verification or password-reset emails do not arrive.
   Check SMTP/Brevo env vars, use a verified sender domain, and inspect Brevo transactional logs.
+- STK push does not arrive on the phone.
+  Check Daraja sandbox credentials, callback URL, phone format, and application logs for token or STK push errors.
 - Admin user cannot be created or cannot log in.
   Run migrations first, then create the admin using `createsuperuser`.
 - `column accounts_customuser.is_email_verified does not exist`

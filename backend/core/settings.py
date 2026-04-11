@@ -71,6 +71,7 @@ INSTALLED_APPS = [
     'maps',
     'transporters',
     'booking',
+    'payments',
 ]
 
 AUTH_USER_MODEL = 'accounts.CustomUser'
@@ -235,3 +236,13 @@ X_FRAME_OPTIONS = 'DENY'
 # Reduce referrer leakage and isolate browsing contexts by default.
 SECURE_REFERRER_POLICY = os.getenv('SECURE_REFERRER_POLICY', 'same-origin')
 SECURE_CROSS_ORIGIN_OPENER_POLICY = os.getenv('SECURE_CROSS_ORIGIN_OPENER_POLICY', 'same-origin')
+
+MPESA_ENV = os.getenv("MPESA_ENV", "sandbox")
+MPESA_CONSUMER_KEY = os.getenv("MPESA_CONSUMER_KEY", "")
+MPESA_CONSUMER_SECRET = os.getenv("MPESA_CONSUMER_SECRET", "")
+MPESA_SHORTCODE = os.getenv("MPESA_SHORTCODE", "")
+MPESA_PASSKEY = os.getenv("MPESA_PASSKEY", "")
+MPESA_CALLBACK_URL = os.getenv("MPESA_CALLBACK_URL", "")
+MPESA_INITIATOR_NAME = os.getenv("MPESA_INITIATOR_NAME", "")
+MPESA_TIMEOUT_SECONDS = int(os.getenv("MPESA_TIMEOUT_SECONDS", "30"))
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "")

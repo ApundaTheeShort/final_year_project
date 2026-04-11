@@ -105,6 +105,107 @@
         box-shadow: var(--shadow);
         padding: 2rem;
     }
+
+    .payment-step-list {
+        display: grid;
+        gap: 0.75rem;
+        margin: 1rem 0 1.5rem;
+    }
+
+    .payment-step {
+        display: flex;
+        gap: 0.75rem;
+        align-items: flex-start;
+        padding: 0.85rem 1rem;
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        background: #f8fafc;
+    }
+
+    .payment-step.is-active {
+        border-color: var(--accent);
+        background: rgba(16, 185, 129, 0.08);
+    }
+
+    .payment-step.is-complete {
+        border-color: rgba(16, 185, 129, 0.35);
+        background: rgba(16, 185, 129, 0.12);
+    }
+
+    .payment-step.is-error {
+        border-color: rgba(239, 68, 68, 0.35);
+        background: rgba(239, 68, 68, 0.08);
+    }
+
+    .payment-step-badge {
+        width: 1.75rem;
+        height: 1.75rem;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        background: #e2e8f0;
+        color: var(--text);
+        flex: none;
+    }
+
+    .payment-step.is-active .payment-step-badge,
+    .payment-step.is-complete .payment-step-badge {
+        background: var(--accent);
+        color: #fff;
+    }
+
+    .payment-step.is-error .payment-step-badge {
+        background: var(--danger);
+        color: #fff;
+    }
+
+    .payment-spinner {
+        width: 1rem;
+        height: 1rem;
+        border: 2px solid rgba(16, 185, 129, 0.2);
+        border-top-color: var(--accent);
+        border-radius: 999px;
+        animation: payment-spin 0.9s linear infinite;
+        display: inline-block;
+        vertical-align: middle;
+        margin-right: 0.5rem;
+    }
+
+    @keyframes payment-spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .payment-success {
+        text-align: center;
+        padding: 1.5rem 1rem;
+        border: 1px solid rgba(16, 185, 129, 0.25);
+        border-radius: var(--radius-lg);
+        background: rgba(16, 185, 129, 0.08);
+        margin-bottom: 1rem;
+    }
+
+    .payment-success-check {
+        width: 4rem;
+        height: 4rem;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--accent);
+        color: #fff;
+        font-size: 2rem;
+        font-weight: 700;
+        margin-bottom: 0.75rem;
+    }
+
+    .card-item.booking-highlight {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
+    }
 </style>
 {% endblock %}
 
@@ -128,7 +229,6 @@
     <button type="button" class="tab-btn" onclick="switchTab('track')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Live Tracking</button>
     <button type="button" class="tab-btn" onclick="switchTab('account')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Account Profile</button>
 </div>
-
 <div id="tab-create" class="tab-content" style="display: block;">
     <div class="stack" style="max-width: 960px; margin: 0 auto; gap: 2rem;">
         
@@ -210,22 +310,25 @@
             </div>
             
             <form id="booking-form" class="stack">
-                <div class="grid grid-2" style="gap: 1.5rem;">
-                    <label>Produce Name
-                        <input name="produce_name" placeholder="e.g. Tomatoes" required style="padding: 1rem; font-size: 1.05rem; margin-top: 0.5rem;">
-                    </label>
-                    <label>Total Weight (kg)
-                        <input name="weight_kg" type="number" step="0.01" min="0.01" placeholder="e.g. 50" required style="padding: 1rem; font-size: 1.05rem; margin-top: 0.5rem;">
-                    </label>
-                </div>
-                <label style="margin-top: 0.5rem;">Description (Optional)
-                    <textarea name="produce_description" placeholder="Any special handling instructions..." style="min-height: 100px; padding: 1rem; font-size: 1.05rem; margin-top: 0.5rem;"></textarea>
-                </label>
-                
-                <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
-                     <button type="submit" class="btn" style="padding: 1rem 2.5rem; font-size: 1.1rem; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);">Dispatch Booking Request</button>
-                </div>
-            </form>
+	                <div class="grid grid-2" style="gap: 1.5rem;">
+	                    <label>Produce Name
+	                        <input name="produce_name" placeholder="e.g. Tomatoes" required style="padding: 1rem; font-size: 1.05rem; margin-top: 0.5rem;">
+	                    </label>
+	                    <label>Total Weight (kg)
+	                        <input name="weight_kg" type="number" step="0.01" min="0.01" placeholder="e.g. 50" required style="padding: 1rem; font-size: 1.05rem; margin-top: 0.5rem;">
+	                    </label>
+	                </div>
+	                <label style="margin-top: 0.5rem;">M-Pesa Phone Number
+	                    <input name="payment_phone_number" value="{{ user.phone_number }}" placeholder="07XXXXXXXX" required style="padding: 1rem; font-size: 1.05rem; margin-top: 0.5rem;">
+	                </label>
+	                <label style="margin-top: 0.5rem;">Description (Optional)
+	                    <textarea name="produce_description" placeholder="Any special handling instructions..." style="min-height: 100px; padding: 1rem; font-size: 1.05rem; margin-top: 0.5rem;"></textarea>
+	                </label>
+	                
+	                <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
+	                     <button type="submit" class="btn" style="padding: 1rem 2.5rem; font-size: 1.1rem; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);">Create Booking And Pay</button>
+	                </div>
+	            </form>
             <p id="booking-message" class="message" style="margin-top: 1.5rem;" hidden></p>
         </section>
     </div>
@@ -320,6 +423,67 @@
     </div>
 </div>
 
+<div id="payment-modal" class="modal-backdrop" hidden>
+    <div class="modal-card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+            <h3 style="margin: 0;">M-Pesa Payment Steps</h3>
+            <button type="button" class="btn btn-outline" id="close-payment-modal">Close</button>
+        </div>
+        <p id="payment-flow-title" style="margin-bottom: 0.5rem; color: var(--text); font-weight: 600;">Booking payment</p>
+        <p id="payment-flow-subtitle" class="muted" style="margin-bottom: 1rem;">Follow the steps below to complete payment.</p>
+
+        <label style="margin-top: 0.5rem;">M-Pesa Phone Number
+            <input id="payment-flow-phone" placeholder="07XXXXXXXX" style="padding: 1rem; font-size: 1.05rem; margin-top: 0.5rem;">
+        </label>
+
+        <div class="payment-step-list" id="payment-step-list">
+            <div class="payment-step" data-payment-step="created">
+                <span class="payment-step-badge">1</span>
+                <div>
+                    <strong>Booking ready</strong>
+                    <p class="muted" style="margin: 0.25rem 0 0;">Your route and transport quote are ready for payment.</p>
+                </div>
+            </div>
+            <div class="payment-step" data-payment-step="stk_sent">
+                <span class="payment-step-badge">2</span>
+                <div>
+                    <strong>STK push sent</strong>
+                    <p class="muted" style="margin: 0.25rem 0 0;">Check your phone for the M-Pesa payment prompt.</p>
+                </div>
+            </div>
+            <div class="payment-step" data-payment-step="waiting">
+                <span class="payment-step-badge">3</span>
+                <div>
+                    <strong>Approve on phone</strong>
+                    <p class="muted" style="margin: 0.25rem 0 0;">Enter your M-Pesa PIN on the phone to complete payment.</p>
+                </div>
+            </div>
+            <div class="payment-step" data-payment-step="confirmed">
+                <span class="payment-step-badge">4</span>
+                <div>
+                    <strong>Booking confirmed</strong>
+                    <p class="muted" style="margin: 0.25rem 0 0;">Once payment succeeds, transporters can see and accept the booking.</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="payment-flow-status" class="panel" style="background: #f8fafc; border: 1px solid var(--border); padding: 1rem; margin-bottom: 1rem;">
+            <p class="muted" style="margin: 0;">Payment has not started yet.</p>
+        </div>
+
+        <div id="payment-success-state" class="payment-success" hidden>
+            <div class="payment-success-check">✓</div>
+            <h4 style="margin: 0 0 0.5rem;">Payment confirmed</h4>
+            <p class="muted" style="margin: 0;">Your booking is now confirmed and visible to matching transporters.</p>
+        </div>
+
+        <div style="display: flex; gap: 0.75rem; justify-content: flex-end; flex-wrap: wrap;">
+            <button type="button" class="btn btn-outline" id="payment-flow-refresh">Check Payment Status</button>
+            <button type="button" class="btn" id="payment-flow-start">Send STK Push</button>
+        </div>
+    </div>
+</div>
+
 
 <script
     src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
@@ -347,6 +511,14 @@
         bookingsPollId: null,
         trackingRenderTimer: null,
         trackedRoutePreviewCache: {},
+        paymentFlow: {
+            bookingId: null,
+            phoneNumber: "{{ user.phone_number }}",
+            pollId: null,
+            bookingLabel: "",
+            isSuccessful: false,
+        },
+        highlightedBookingId: null,
     };
 
     const map = L.map("booking-map").setView([-1.286389, 36.817223], 11);
@@ -391,9 +563,57 @@
         const text = await response.text();
         const data = text ? JSON.parse(text) : null;
         if (!response.ok) {
-            throw new Error(JSON.stringify(data || {detail: "Request failed"}, null, 2));
+            throw new Error(extractErrorMessage(data));
         }
         return data;
+    }
+
+    function extractErrorMessage(payload) {
+        if (!payload) {
+            return "Something went wrong. Please try again.";
+        }
+        if (typeof payload === "string") {
+            return normalizeUserMessage(payload);
+        }
+        if (Array.isArray(payload)) {
+            return normalizeUserMessage(payload[0] || "Something went wrong. Please try again.");
+        }
+        if (payload.non_field_errors?.length) {
+            return normalizeUserMessage(payload.non_field_errors[0]);
+        }
+        if (payload.detail) {
+            return normalizeUserMessage(payload.detail);
+        }
+        for (const value of Object.values(payload)) {
+            if (Array.isArray(value) && value.length) {
+                return typeof value[0] === "string" ? normalizeUserMessage(value[0]) : extractErrorMessage(value[0]);
+            }
+            if (typeof value === "string" && value) {
+                return normalizeUserMessage(value);
+            }
+            if (value && typeof value === "object") {
+                return extractErrorMessage(value);
+            }
+        }
+        return "Something went wrong. Please try again.";
+    }
+
+    function normalizeUserMessage(message) {
+        const text = String(message || "").trim();
+        if (!text) {
+            return "Something went wrong. Please try again.";
+        }
+        const lowered = text.toLowerCase();
+        if (lowered.includes("request failed")) {
+            return "Something went wrong. Please try again.";
+        }
+        if (lowered.includes("callback") || lowered.includes("token") || lowered.includes("configuration")) {
+            return "This service is temporarily unavailable. Please try again shortly.";
+        }
+        if (lowered.includes("daraja") || lowered.includes("stk")) {
+            return "We could not complete the M-Pesa step right now. Please try again.";
+        }
+        return text;
     }
 
     function escapeHtml(value) {
@@ -590,7 +810,7 @@
 
         stopButton.hidden = false;
         const transporterName = booking.transporter_profile?.company_name || "Transporter assigned";
-        const trackingVisible = ["picked_up", "in_transit", "delivered"].includes(booking.status);
+        const trackingVisible = ["picked_up", "in_transit", "delivered", "completed"].includes(booking.status);
         const tripTime = booking.estimated_duration_minutes || "Unavailable";
         element.innerHTML = `
             <div class="stack">
@@ -623,7 +843,7 @@
                 message = `Booking #${booking.id}: your goods have been picked up.`;
             } else if (booking.status === "in_transit") {
                 message = `Booking #${booking.id}: your goods are now in transit.`;
-            } else if (booking.status === "delivered") {
+            } else if (booking.status === "delivered" || booking.status === "completed") {
                 message = `Booking #${booking.id}: your goods have been delivered.`;
             }
             if (message) {
@@ -642,7 +862,7 @@
         if (!booking) {
             return;
         }
-        const trackingVisible = ["picked_up", "in_transit", "delivered"].includes(booking.status);
+        const trackingVisible = ["picked_up", "in_transit", "delivered", "completed"].includes(booking.status);
         const pickupPoint = safeLatLng(booking.pickup_latitude, booking.pickup_longitude);
         const dropoffPoint = safeLatLng(booking.dropoff_latitude, booking.dropoff_longitude);
 
@@ -1020,10 +1240,179 @@
         }
     }
 
+    async function initiatePaymentForBooking(bookingId, phoneNumber) {
+        return apiRequest("/api/payments/stk-push/", {
+            method: "POST",
+            body: JSON.stringify({
+                booking_id: bookingId,
+                phone_number: phoneNumber,
+            }),
+        });
+    }
+
+    async function fetchBookingPaymentStatus(bookingId) {
+        return apiRequest(`/api/bookings/${bookingId}/payment-status/`, {method: "GET"});
+    }
+
+    function stopPaymentFlowPolling() {
+        if (state.paymentFlow.pollId) {
+            window.clearInterval(state.paymentFlow.pollId);
+            state.paymentFlow.pollId = null;
+        }
+    }
+
+    function setPaymentStepState(stepName, stateName) {
+        const step = document.querySelector(`[data-payment-step="${stepName}"]`);
+        if (!step) {
+            return;
+        }
+        step.classList.remove("is-active", "is-complete", "is-error");
+        if (stateName) {
+            step.classList.add(stateName);
+        }
+    }
+
+    function resetPaymentSteps() {
+        ["created", "stk_sent", "waiting", "confirmed"].forEach((step) => setPaymentStepState(step, null));
+        setPaymentStepState("created", "is-active");
+    }
+
+    function setPaymentFlowStatus(message, isError = false) {
+        const element = document.getElementById("payment-flow-status");
+        element.innerHTML = `<p class="${isError ? "error" : "muted"}" style="margin: 0;">${escapeHtml(message)}</p>`;
+        element.style.borderColor = isError ? "rgba(239, 68, 68, 0.35)" : "var(--border)";
+        element.style.background = isError ? "rgba(239, 68, 68, 0.08)" : "#f8fafc";
+    }
+
+    function setPaymentFlowWaiting(message) {
+        const element = document.getElementById("payment-flow-status");
+        element.innerHTML = `<p class="muted" style="margin: 0;"><span class="payment-spinner"></span>${escapeHtml(message)}</p>`;
+        element.style.borderColor = "rgba(16, 185, 129, 0.25)";
+        element.style.background = "rgba(16, 185, 129, 0.06)";
+    }
+
+    function openPaymentModal({bookingId, phoneNumber, bookingLabel}) {
+        state.paymentFlow.bookingId = bookingId;
+        state.paymentFlow.phoneNumber = phoneNumber || "{{ user.phone_number }}";
+        state.paymentFlow.bookingLabel = bookingLabel || `Booking #${bookingId}`;
+        state.paymentFlow.isSuccessful = false;
+        document.getElementById("payment-flow-title").textContent = state.paymentFlow.bookingLabel;
+        document.getElementById("payment-flow-phone").value = state.paymentFlow.phoneNumber;
+        document.getElementById("payment-flow-start").disabled = false;
+        document.getElementById("payment-success-state").hidden = true;
+        resetPaymentSteps();
+        setPaymentFlowStatus("Ready to send the M-Pesa payment prompt.");
+        document.getElementById("payment-modal").hidden = false;
+    }
+
+    function closePaymentModal() {
+        stopPaymentFlowPolling();
+        document.getElementById("payment-modal").hidden = true;
+    }
+
+    function updatePaymentFlowFromStatus(paymentSnapshot) {
+        const bookingStatus = paymentSnapshot.status;
+        const paymentStatus = paymentSnapshot.payment_status;
+        const payment = paymentSnapshot.payment;
+
+        resetPaymentSteps();
+        setPaymentStepState("created", "is-complete");
+
+        if (payment?.status === "stk_push_sent" || paymentStatus === "pending") {
+            setPaymentStepState("stk_sent", "is-complete");
+            setPaymentStepState("waiting", "is-active");
+            setPaymentFlowWaiting("STK push sent. Check your phone and enter your M-Pesa PIN.");
+            return;
+        }
+
+        if (payment?.status === "paid_held" || paymentStatus === "paid" || bookingStatus === "confirmed") {
+            setPaymentStepState("stk_sent", "is-complete");
+            setPaymentStepState("waiting", "is-complete");
+            setPaymentStepState("confirmed", "is-complete");
+            const receipt = payment?.mpesa_receipt_number ? ` Receipt: ${payment.mpesa_receipt_number}.` : "";
+            setPaymentFlowStatus(`Payment confirmed. Your booking is now visible to matching transporters.${receipt}`);
+            document.getElementById("payment-flow-start").disabled = true;
+            document.getElementById("payment-success-state").hidden = false;
+            if (!state.paymentFlow.isSuccessful) {
+                state.paymentFlow.isSuccessful = true;
+                state.highlightedBookingId = state.paymentFlow.bookingId;
+                window.setTimeout(async () => {
+                    await loadBookings();
+                    switchTab("list");
+                    highlightBookingCard(state.highlightedBookingId);
+                    closePaymentModal();
+                }, 1500);
+            }
+            stopPaymentFlowPolling();
+            return;
+        }
+
+        if (payment?.status === "failed" || payment?.status === "cancelled") {
+            setPaymentStepState("stk_sent", "is-error");
+            setPaymentStepState("waiting", "is-error");
+            setPaymentFlowStatus(payment.result_desc || "Payment did not complete. You can send the STK push again.", true);
+            document.getElementById("payment-flow-start").disabled = false;
+            stopPaymentFlowPolling();
+            return;
+        }
+
+        setPaymentFlowStatus("Payment has not started yet.");
+    }
+
+    async function refreshPaymentFlowStatus() {
+        if (!state.paymentFlow.bookingId) {
+            return;
+        }
+        try {
+            const paymentSnapshot = await fetchBookingPaymentStatus(state.paymentFlow.bookingId);
+            updatePaymentFlowFromStatus(paymentSnapshot);
+            await loadBookings();
+        } catch (error) {
+            setPaymentFlowStatus(error.message, true);
+        }
+    }
+
+    function startPaymentFlowPolling() {
+        stopPaymentFlowPolling();
+        state.paymentFlow.pollId = window.setInterval(refreshPaymentFlowStatus, 5000);
+    }
+
+    async function startPaymentFlow() {
+        const bookingId = state.paymentFlow.bookingId;
+        const phoneNumber = document.getElementById("payment-flow-phone").value.trim();
+        if (!bookingId) {
+            setPaymentFlowStatus("No booking is selected for payment.", true);
+            return;
+        }
+        if (!phoneNumber) {
+            setPaymentFlowStatus("Enter the M-Pesa phone number before continuing.", true);
+            return;
+        }
+        setPaymentStepState("created", "is-complete");
+        setPaymentStepState("stk_sent", "is-active");
+        setPaymentFlowStatus("Sending the M-Pesa prompt to your phone...");
+        document.getElementById("payment-flow-start").disabled = true;
+        try {
+            const paymentResponse = await initiatePaymentForBooking(bookingId, phoneNumber);
+            const callbackHint = paymentResponse.callback_url_hint
+                ? ` If callbacks are not reaching the app, set MPESA_CALLBACK_URL to ${paymentResponse.callback_url_hint}.`
+                : "";
+            setPaymentStepState("stk_sent", "is-complete");
+            setPaymentStepState("waiting", "is-active");
+            setPaymentFlowWaiting(`STK push sent successfully. Check your phone and enter your M-Pesa PIN.${callbackHint}`);
+            startPaymentFlowPolling();
+            await loadBookings();
+        } catch (error) {
+            setPaymentStepState("stk_sent", "is-error");
+            setPaymentFlowStatus(error.message, true);
+            document.getElementById("payment-flow-start").disabled = false;
+        }
+    }
+
     function bookingCard(booking) {
         const transporter = booking.transporter_profile?.company_name || "Awaiting assignment";
         return `
-            <article class="card-item">
+            <article class="card-item ${state.highlightedBookingId === booking.id ? "booking-highlight" : ""}" data-booking-card-id="${booking.id}">
                 <div class="row">
                     <h3>${escapeHtml(booking.produce_name)}</h3>
                     <span class="status-badge status-${escapeHtml(booking.status)}">${escapeHtml(booking.status)}</span>
@@ -1035,8 +1424,10 @@
                 <p class="meta">Vehicle needed: ${escapeHtml(booking.vehicle_type_required)}</p>
                 <p class="meta">Assigned transporter: ${escapeHtml(transporter)}</p>
                 <p class="meta">Quoted price: ${escapeHtml(booking.quoted_price || "Pending")}</p>
+                <p class="meta">Payment: ${escapeHtml(booking.payment_status || "unpaid")}</p>
                 <div class="action-row" style="margin-top: 1rem;">
-                    ${booking.status === "pending" ? `<button type="button" class="btn btn-danger" data-delete-booking-id="${booking.id}">Delete booking</button>` : ""}
+                    ${booking.status === "pending_payment" ? `<button type="button" class="btn" data-pay-booking-id="${booking.id}">Pay Now</button>` : ""}
+                    ${booking.status === "pending_payment" ? `<button type="button" class="btn btn-danger" data-delete-booking-id="${booking.id}">Delete booking</button>` : ""}
                     <button type="button" class="btn btn-outline" data-track-booking-id="${booking.id}">Track live</button>
                 </div>
             </article>
@@ -1057,6 +1448,22 @@
         } catch (error) {
             list.innerHTML = `<p class="message error">${escapeHtml(error.message)}</p>`;
         }
+    }
+
+    function highlightBookingCard(bookingId) {
+        document.querySelectorAll("[data-booking-card-id]").forEach((card) => {
+            card.classList.toggle("booking-highlight", Number(card.dataset.bookingCardId) === bookingId);
+        });
+        const target = document.querySelector(`[data-booking-card-id="${bookingId}"]`);
+        if (target) {
+            target.scrollIntoView({behavior: "smooth", block: "center"});
+        }
+        window.setTimeout(() => {
+            if (state.highlightedBookingId === bookingId) {
+                state.highlightedBookingId = null;
+                document.querySelectorAll("[data-booking-card-id]").forEach((card) => card.classList.remove("booking-highlight"));
+            }
+        }, 6000);
     }
 
     document.getElementById("pickup-mode").addEventListener("click", () => {
@@ -1086,6 +1493,17 @@
             } catch (error) {
                 showMessage(message, error.message, true);
             }
+            return;
+        }
+
+        const payButton = event.target.closest("[data-pay-booking-id]");
+        if (payButton) {
+            const bookingId = Number(payButton.dataset.payBookingId);
+            openPaymentModal({
+                bookingId,
+                phoneNumber: "{{ user.phone_number }}",
+                bookingLabel: `Booking #${bookingId} payment`,
+            });
             return;
         }
 
@@ -1123,6 +1541,8 @@
         }
 
         const payload = Object.fromEntries(new FormData(form).entries());
+        const paymentPhoneNumber = payload.payment_phone_number;
+        delete payload.payment_phone_number;
         payload.pickup_place = state.pickupPlace;
         payload.dropoff_place = state.dropoffPlace;
 
@@ -1133,7 +1553,13 @@
             });
             form.reset();
             resetBookingComposer();
-            showMessage(message, `Booking #${booking.id} created from the mapped route.`, false);
+            openPaymentModal({
+                bookingId: booking.id,
+                phoneNumber: paymentPhoneNumber,
+                bookingLabel: `Booking #${booking.id} payment`,
+            });
+            await startPaymentFlow();
+            showMessage(message, `Booking #${booking.id} created. Follow the payment steps shown to confirm it.`, false);
             await loadBookings();
         } catch (error) {
             showMessage(message, error.message, true);
@@ -1144,6 +1570,14 @@
     document.getElementById("stop-tracking").addEventListener("click", stopTracking);
     document.getElementById("recenter-booking-map").addEventListener("click", recenterBookingMap);
     document.getElementById("recenter-tracking-map").addEventListener("click", recenterTrackingMap);
+    document.getElementById("payment-flow-start").addEventListener("click", startPaymentFlow);
+    document.getElementById("payment-flow-refresh").addEventListener("click", refreshPaymentFlowStatus);
+    document.getElementById("close-payment-modal").addEventListener("click", closePaymentModal);
+    document.getElementById("payment-modal").addEventListener("click", (event) => {
+        if (event.target.id === "payment-modal") {
+            closePaymentModal();
+        }
+    });
     document.getElementById("open-profile-modal").addEventListener("click", () => {
         document.getElementById("profile-modal").hidden = false;
     });

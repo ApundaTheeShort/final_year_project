@@ -28,13 +28,21 @@ def determine_vehicle_type(weight_kg):
 
 
 class BookingStatus(models.TextChoices):
-    PENDING = "pending", "Pending"
+    PENDING_PAYMENT = "pending_payment", "Pending Payment"
+    CONFIRMED = "confirmed", "Confirmed"
     ACCEPTED = "accepted", "Accepted"
     DECLINED = "declined", "Declined"
     PICKED_UP = "picked_up", "Picked Up"
     IN_TRANSIT = "in_transit", "In Transit"
     DELIVERED = "delivered", "Delivered"
+    COMPLETED = "completed", "Completed"
     CANCELLED = "cancelled", "Cancelled"
+
+
+class BookingPaymentStatus(models.TextChoices):
+    UNPAID = "unpaid", "Unpaid"
+    PENDING = "pending", "Pending"
+    PAID = "paid", "Paid"
 
 
 class Booking(models.Model):
@@ -76,7 +84,12 @@ class Booking(models.Model):
     route_geometry = models.JSONField(null=True, blank=True)
     vehicle_type_required = models.CharField(max_length=20, choices=VehicleType.choices)
     quoted_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
-    status = models.CharField(max_length=20, choices=BookingStatus.choices, default=BookingStatus.PENDING)
+    status = models.CharField(max_length=20, choices=BookingStatus.choices, default=BookingStatus.PENDING_PAYMENT)
+    payment_status = models.CharField(
+        max_length=20,
+        choices=BookingPaymentStatus.choices,
+        default=BookingPaymentStatus.UNPAID,
+    )
     accepted_at = models.DateTimeField(null=True, blank=True)
     delivered_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -92,6 +105,8 @@ class Booking(models.Model):
             raise ValidationError("Assigned transporter must have the driver role.")
         if self.vehicle and not self.vehicle.can_carry(self.weight_kg):
             raise ValidationError("Selected vehicle cannot carry this booking's weight.")
+        if self.status in {BookingStatus.CONFIRMED, BookingStatus.ACCEPTED, BookingStatus.PICKED_UP, BookingStatus.IN_TRANSIT, BookingStatus.DELIVERED, BookingStatus.COMPLETED} and self.payment_status != BookingPaymentStatus.PAID:
+            raise ValidationError("Confirmed or active bookings must have a successful payment record.")
 
     def save(self, *args, **kwargs):
         if self.weight_kg and not self.vehicle_type_required:

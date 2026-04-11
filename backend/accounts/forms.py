@@ -30,7 +30,7 @@ class CustomUserCreationForm(UserCreationForm):
     def clean_role(self):
         role = self.cleaned_data["role"]
         if role not in self.ALLOWED_ROLES:
-            raise ValidationError("Select a valid account type.")
+            raise ValidationError("Choose whether you are signing up as a farmer or transporter.")
         return role
 
 
@@ -65,14 +65,14 @@ class ProfileAccountForm(forms.ModelForm):
         phone_number = self.cleaned_data["phone_number"]
         existing = CustomUser.objects.filter(phone_number=phone_number).exclude(id=self.instance.id)
         if existing.exists():
-            raise forms.ValidationError("This phone number is already in use.")
+            raise forms.ValidationError("That phone number is already linked to another account.")
         return phone_number
 
     def clean_email(self):
         email = self.cleaned_data["email"]
         existing = CustomUser.objects.filter(email=email).exclude(id=self.instance.id)
         if existing.exists():
-            raise forms.ValidationError("This email address is already in use.")
+            raise forms.ValidationError("That email address is already linked to another account.")
         return email
 
 
@@ -84,11 +84,11 @@ class ResendVerificationForm(forms.Form):
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist as exc:
-            raise forms.ValidationError("No account was found with that email address.") from exc
+            raise forms.ValidationError("We could not find an account with that email address.") from exc
         if user.is_staff:
-            raise forms.ValidationError("This account cannot use email verification resend.")
+            raise forms.ValidationError("This account does not use this email verification page.")
         if user.is_email_verified:
-            raise forms.ValidationError("This email address is already verified.")
+            raise forms.ValidationError("This email address has already been verified.")
         self.user = user
         return email
 

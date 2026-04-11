@@ -84,7 +84,7 @@ class AdminDashboardTests(TestCase):
         )
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Transport rates updated.")
+        self.assertContains(response, "Transport rates have been updated.")
         self.assertContains(response, "KES 220.00")
         self.assertEqual(
             str(TransportPricing.objects.get(vehicle_type="pickup").price_per_km),
@@ -125,7 +125,7 @@ class AdminDashboardTests(TestCase):
         booking.refresh_from_db()
         self.assertEqual(booking.status, "delivered")
         self.assertIsNotNone(booking.delivered_at)
-        self.assertContains(response, f"Booking #{booking.id} updated to Delivered.")
+        self.assertContains(response, f"Booking #{booking.id} has been updated to Delivered.")
 
     def test_staff_user_can_delete_booking_from_dashboard(self):
         booking = Booking.objects.create(
@@ -143,7 +143,7 @@ class AdminDashboardTests(TestCase):
             estimated_distance_km="10.00",
             vehicle_type_required="pickup",
             quoted_price="2000.00",
-            status="pending",
+            status="confirmed",
         )
         self.client.force_login(self.admin)
 
@@ -158,7 +158,7 @@ class AdminDashboardTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertFalse(Booking.objects.filter(id=booking.id).exists())
-        self.assertContains(response, f"Booking #{booking.id} deleted.")
+        self.assertContains(response, f"Booking #{booking.id} has been deleted.")
 
 
 class CustomUserAuthTests(TestCase):
@@ -222,7 +222,7 @@ class CustomUserAuthTests(TestCase):
         self.assertEqual(user.last_name, "Farmer")
         self.assertEqual(user.phone_number, "0700000999")
         self.assertEqual(user.email, "newfarmer@example.com")
-        self.assertContains(response, "Profile updated.")
+        self.assertContains(response, "Your profile has been updated.")
 
     def test_profile_update_rejects_duplicate_phone_or_email(self):
         user = User.objects.create_user(
@@ -259,7 +259,7 @@ class CustomUserAuthTests(TestCase):
         user.refresh_from_db()
         self.assertEqual(user.phone_number, "0700000201")
         self.assertEqual(user.email, "farmername@example.com")
-        self.assertContains(response, "This phone number is already in use.")
+        self.assertContains(response, "That phone number is already linked to another account.")
 
     def test_profile_update_requires_login(self):
         response = self.client.post("/accounts/profile/", {"first_name": "Nope", "last_name": "User"})
@@ -326,7 +326,7 @@ class EmailVerificationFlowTests(TestCase):
         user.refresh_from_db()
         self.assertTrue(user.is_email_verified)
         self.assertIsNotNone(user.email_verified_at)
-        self.assertContains(response, "Email verified. You can now sign in.")
+        self.assertContains(response, "Your email has been verified. You can now sign in.")
 
     def test_resend_verification_sends_new_email(self):
         User.objects.create_user(

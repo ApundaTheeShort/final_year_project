@@ -76,7 +76,8 @@ class AdminDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
         booking_summary = Booking.objects.aggregate(
             total_bookings=Count("id"),
             active_bookings=Count("id", filter=Q(status__in=[
-                BookingStatus.PENDING,
+                BookingStatus.PENDING_PAYMENT,
+                BookingStatus.CONFIRMED,
                 BookingStatus.ACCEPTED,
                 BookingStatus.PICKED_UP,
                 BookingStatus.IN_TRANSIT,
@@ -136,7 +137,7 @@ class AdminDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
         form = TransportRateForm(request.POST)
         if form.is_valid():
             form.save()
-            messages.success(request, "Transport rates updated.")
+            messages.success(request, "Transport rates have been updated.")
             return redirect("admin-dashboard")
 
         context = self.get_context_data(**kwargs)
@@ -153,7 +154,7 @@ class AdminDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
         new_status = request.POST.get("status", "")
         valid_statuses = {choice for choice, _ in BookingStatus.choices}
         if new_status not in valid_statuses:
-            messages.error(request, "Select a valid booking status.")
+            messages.error(request, "Choose a valid booking status.")
             return redirect("admin-dashboard")
 
         booking.status = new_status
@@ -161,14 +162,14 @@ class AdminDashboardView(LoginRequiredMixin, UserPassesTestMixin, TemplateView):
             from django.utils import timezone
             booking.delivered_at = timezone.now()
         booking.save(update_fields=["status", "delivered_at", "updated_at"])
-        messages.success(request, f"Booking #{booking.id} updated to {booking.get_status_display()}.")
+        messages.success(request, f"Booking #{booking.id} has been updated to {booking.get_status_display()}.")
         return redirect("admin-dashboard")
 
     def handle_booking_delete(self, request):
         booking = get_object_or_404(Booking, id=request.POST.get("booking_id"))
         booking_id = booking.id
         booking.delete()
-        messages.success(request, f"Booking #{booking_id} deleted.")
+        messages.success(request, f"Booking #{booking_id} has been deleted.")
         return redirect("admin-dashboard")
 
 
@@ -179,7 +180,7 @@ class SignUpView(CreateView):
     def form_valid(self, form):
         response = super().form_valid(form)
         send_verification_email(self.request, self.object)
-        messages.success(self.request, "Account created. Check your email to verify your address before signing in.")
+        messages.success(self.request, "Your account has been created. Check your email to verify your address before signing in.")
         return response
 
     def get_success_url(self):
@@ -210,9 +211,9 @@ class ProfileUpdateView(LoginRequiredMixin, View):
                 updated_user.email_verified_at = None
                 updated_user.save(update_fields=["is_email_verified", "email_verified_at"])
                 send_verification_email(request, updated_user)
-                messages.success(request, "Profile updated. Verify your new email address from the inbox link.")
+                messages.success(request, "Your profile has been updated. Check your email to verify the new address.")
                 return redirect("verification-sent")
-            messages.success(request, "Profile updated.")
+            messages.success(request, "Your profile has been updated.")
         else:
             for errors in form.errors.values():
                 if errors:
@@ -238,10 +239,10 @@ class VerifyEmailView(View):
                 user.is_email_verified = True
                 user.email_verified_at = timezone.now()
                 user.save(update_fields=["is_email_verified", "email_verified_at"])
-            messages.success(request, "Email verified. You can now sign in.")
+            messages.success(request, "Your email has been verified. You can now sign in.")
             return redirect("login")
 
-        messages.error(request, "That verification link is invalid or has expired.")
+        messages.error(request, "This verification link is no longer valid. Request a new one and try again.")
         return redirect("resend-verification")
 
 

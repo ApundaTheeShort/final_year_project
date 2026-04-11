@@ -13,7 +13,7 @@ The architecture is designed to be:
 - secure
 - maintainable
 - mobile-friendly
-- suitable for future extensions such as payments, GPS tracking, and analytics
+- suitable for future extensions such as deeper analytics, background mobile tracking, and notifications
 
 ---
 
@@ -26,6 +26,7 @@ The main goals of the architecture are:
 - Allow secure user authentication and role-based access
 - Support location-aware search and booking workflows
 - Support email verification and password reset through SMTP delivery
+- Support booking payment and delivery-linked payout release
 - Make the system easy to maintain and extend
 - Ensure the system performs well on mobile and low-resource devices
 
@@ -39,7 +40,7 @@ The system follows a **client-server architecture** with a **layered design**.
 1. **Presentation Layer** – frontend user interface
 2. **Application Layer** – backend business logic and APIs
 3. **Data Layer** – relational database and persistent storage
-4. **Integration Layer** – external services like maps and email delivery
+4. **Integration Layer** – external services like maps, payments, and email delivery
 
 This approach makes the system easier to test, maintain, and expand.
 
@@ -54,15 +55,17 @@ This approach makes the system easier to test, maintain, and expand.
 
 ### External Services
 - Mapping service stack: OpenStreetMap tiles, Nominatim, OSRM
+- Safaricom Daraja sandbox for M-Pesa STK Push
 - SMTP email delivery provider such as Brevo
 - Hosting/deployment infrastructure
 
 ### Core Business Interaction
 - Farmers create transport requests
-- System calculates route, quote, and matching transporters
+- System calculates route, quote, payment requirement, and matching transporters
 - Transporters accept matching requests
 - Deliveries move through controlled status stages
 - Farmers track accepted deliveries live from the dashboard
+- Payments are held in application records until delivery is completed
 
 ---
 
@@ -92,6 +95,7 @@ Active Integrations:
 - OpenStreetMap tile service
 - Nominatim geocoding
 - OSRM route service
+- Safaricom Daraja sandbox
 - SMTP transactional email provider
 
 Optional Future Integrations:

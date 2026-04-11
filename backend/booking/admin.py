@@ -5,8 +5,8 @@ from .models import Booking, BookingStatusHistory, TrackingUpdate
 
 @admin.register(Booking)
 class BookingAdmin(admin.ModelAdmin):
-    list_display = ("id", "farmer", "transporter", "produce_name", "weight_kg", "vehicle_type_required", "status")
-    list_filter = ("status", "vehicle_type_required")
+    list_display = ("id", "farmer", "transporter", "produce_name", "weight_kg", "vehicle_type_required", "status", "payment_status")
+    list_filter = ("status", "payment_status", "vehicle_type_required")
     search_fields = ("produce_name", "pickup_address", "dropoff_address", "farmer__phone_number")
 
 

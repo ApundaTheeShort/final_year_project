@@ -106,6 +106,19 @@
         padding: 2rem;
     }
 
+    .modal-card.payment-modal-card {
+        width: min(100%, 720px);
+        max-height: min(90vh, 860px);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .payment-modal-body {
+        overflow-y: auto;
+        padding-right: 0.35rem;
+    }
+
     .payment-step-list {
         display: grid;
         gap: 0.75rem;
@@ -206,6 +219,46 @@
         border-color: var(--accent);
         box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.15);
     }
+
+    .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+    }
+
+    .metric-card {
+        background: rgba(255,255,255,0.8);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: 1.25rem;
+    }
+
+    .metric-card h3 {
+        margin: 0 0 0.5rem;
+        font-size: 0.95rem;
+        color: var(--muted);
+    }
+
+    .metric-card p {
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: 700;
+    }
+
+    @media (max-width: 640px) {
+        .modal-backdrop {
+            padding: 0.75rem;
+            align-items: flex-start;
+        }
+
+        .modal-card {
+            padding: 1.25rem;
+        }
+
+        .modal-card.payment-modal-card {
+            max-height: calc(100vh - 1.5rem);
+        }
+    }
 </style>
 {% endblock %}
 
@@ -227,6 +280,7 @@
     <button type="button" class="tab-btn active" onclick="switchTab('create')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--accent); border-bottom: 2px solid var(--accent); cursor: pointer; border-radius: 0;">Create Booking</button>
     <button type="button" class="tab-btn" onclick="switchTab('list')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">My Bookings</button>
     <button type="button" class="tab-btn" onclick="switchTab('track')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Live Tracking</button>
+    <button type="button" class="tab-btn" onclick="switchTab('reports')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Reports</button>
     <button type="button" class="tab-btn" onclick="switchTab('account')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Account Profile</button>
 </div>
 <div id="tab-create" class="tab-content" style="display: block;">
@@ -362,6 +416,81 @@
         <p id="tracking-message" class="message" style="margin-top: 1rem;" hidden></p>
     </section>
 </div>
+<div id="tab-reports" class="tab-content" style="display: none;">
+    <div class="stack" style="max-width: 1100px; margin: 0 auto; gap: 2rem;">
+        <section class="panel">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
+                <div>
+                    <h2 style="margin: 0;">Booking Reports</h2>
+                    <p class="muted" style="margin: 0.35rem 0 0;">A summary of your transport requests and spending.</p>
+                </div>
+                <a href="{% url 'farmer-bookings-report-export' %}" class="btn btn-outline">Download CSV Report</a>
+            </div>
+            <div class="metric-grid">
+                <div class="metric-card">
+                    <h3>Total Bookings</h3>
+                    <p>{{ farmer_report_summary.total_bookings }}</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Pending Payment</h3>
+                    <p>{{ farmer_report_summary.pending_payment }}</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Active Deliveries</h3>
+                    <p>{{ farmer_report_summary.active_deliveries }}</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Delivered</h3>
+                    <p>{{ farmer_report_summary.delivered_bookings }}</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Paid Bookings</h3>
+                    <p>{{ farmer_report_summary.paid_bookings }}</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Total Quoted Spend</h3>
+                    <p>KES {{ farmer_report_summary.total_spend }}</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h3 style="margin-bottom: 1rem;">Recent Booking Statement</h3>
+            {% if farmer_recent_report_bookings %}
+            <div style="overflow-x: auto;">
+                <table style="margin-top: 0;">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Produce</th>
+                            <th>Vehicle</th>
+                            <th>Status</th>
+                            <th>Payment</th>
+                            <th>Quoted Price</th>
+                            <th>Created</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for booking in farmer_recent_report_bookings %}
+                        <tr>
+                            <td>#{{ booking.id }}</td>
+                            <td>{{ booking.produce_name }}</td>
+                            <td>{{ booking.get_vehicle_type_required_display }}</td>
+                            <td>{{ booking.get_status_display }}</td>
+                            <td>{{ booking.get_payment_status_display }}</td>
+                            <td>KES {{ booking.quoted_price|default:"0.00" }}</td>
+                            <td>{{ booking.created_at|date:"Y-m-d H:i" }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="muted">Your report will appear here after you create your first booking.</p>
+            {% endif %}
+        </section>
+    </div>
+</div>
 <div id="tab-account" class="tab-content" style="display: none;">
     <section class="panel" style="max-width: 600px; margin: 0 auto; padding: 2rem;">
         <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem;">
@@ -424,7 +553,8 @@
 </div>
 
 <div id="payment-modal" class="modal-backdrop" hidden>
-    <div class="modal-card">
+    <div class="modal-card payment-modal-card">
+        <div class="payment-modal-body">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
             <h3 style="margin: 0;">M-Pesa Payment Steps</h3>
             <button type="button" class="btn btn-outline" id="close-payment-modal">Close</button>
@@ -481,6 +611,7 @@
             <button type="button" class="btn btn-outline" id="payment-flow-refresh">Check Payment Status</button>
             <button type="button" class="btn" id="payment-flow-start">Send STK Push</button>
         </div>
+        </div>
     </div>
 </div>
 
@@ -508,6 +639,7 @@
         trackedBooking: null,
         bookingStatuses: {},
         bookingsLoaded: false,
+        bookingsSnapshot: null,
         bookingsPollId: null,
         trackingRenderTimer: null,
         trackedRoutePreviewCache: {},
@@ -521,7 +653,7 @@
         highlightedBookingId: null,
     };
 
-    const map = L.map("booking-map").setView([-1.286389, 36.817223], 11);
+    const map = L.map("booking-map", {preferCanvas: true}).setView([-1.286389, 36.817223], 11);
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         maxZoom: 19,
         attribution: "&copy; OpenStreetMap contributors",
@@ -675,6 +807,23 @@
         } catch (error) {
             console.error("Unable to add polyline", error);
             return null;
+        }
+    }
+
+    function safeInvalidateMap(targetMap, onAfter = null) {
+        try {
+            targetMap.invalidateSize(false);
+        } catch (error) {
+            console.error("Unable to resize map safely", error);
+        }
+        if (typeof onAfter === "function") {
+            window.requestAnimationFrame(() => {
+                try {
+                    onAfter();
+                } catch (error) {
+                    console.error("Unable to redraw map after resize", error);
+                }
+            });
         }
     }
 
@@ -903,7 +1052,6 @@
             [trackingPickupMarker, trackingDropoffMarker, trackingRouteLine, trackingTrailLine, trackingDriverMarker],
             [30, 30],
         );
-        window.setTimeout(() => trackingMapInstance.invalidateSize(), 0);
     }
 
     function scheduleTrackingMapRender() {
@@ -913,8 +1061,7 @@
         state.trackingRenderTimer = window.setTimeout(() => {
             try {
                 const trackingMapInstance = ensureTrackingMap();
-                trackingMapInstance.invalidateSize();
-                renderTrackingMap();
+                safeInvalidateMap(trackingMapInstance, renderTrackingMap);
             } catch (error) {
                 console.error("Farmer tracking map render failed", error);
                 showMessage(document.getElementById("tracking-message"), "Live route is temporarily unavailable.", true);
@@ -1337,7 +1484,7 @@
                 state.paymentFlow.isSuccessful = true;
                 state.highlightedBookingId = state.paymentFlow.bookingId;
                 window.setTimeout(async () => {
-                    await loadBookings();
+                    await loadBookings(false);
                     switchTab("list");
                     highlightBookingCard(state.highlightedBookingId);
                     closePaymentModal();
@@ -1366,7 +1513,7 @@
         try {
             const paymentSnapshot = await fetchBookingPaymentStatus(state.paymentFlow.bookingId);
             updatePaymentFlowFromStatus(paymentSnapshot);
-            await loadBookings();
+            await loadBookings(false);
         } catch (error) {
             setPaymentFlowStatus(error.message, true);
         }
@@ -1401,7 +1548,7 @@
             setPaymentStepState("waiting", "is-active");
             setPaymentFlowWaiting(`STK push sent successfully. Check your phone and enter your M-Pesa PIN.${callbackHint}`);
             startPaymentFlowPolling();
-            await loadBookings();
+            await loadBookings(false);
         } catch (error) {
             setPaymentStepState("stk_sent", "is-error");
             setPaymentFlowStatus(error.message, true);
@@ -1434,18 +1581,40 @@
         `;
     }
 
-    async function loadBookings() {
+    function serializeBookingsSnapshot(bookings) {
+        return JSON.stringify(bookings);
+    }
+
+    async function loadBookings(showLoadingState = true) {
         const list = document.getElementById("booking-list");
-        list.innerHTML = '<p class="muted">Loading bookings...</p>';
+        const listTabVisible = document.getElementById("tab-list").style.display !== "none";
+        const scrollPosition = listTabVisible ? window.scrollY : null;
+        if (showLoadingState || !list.children.length) {
+            list.innerHTML = '<p class="muted">Loading bookings...</p>';
+        }
         try {
             const bookings = await apiRequest("/api/bookings/");
             maybeNotifyStatusChanges(bookings);
+            const snapshot = serializeBookingsSnapshot(bookings);
             if (!bookings.length) {
-                list.innerHTML = '<p class="muted">No bookings yet.</p>';
+                state.bookingsSnapshot = snapshot;
+                if (list.innerHTML !== '<p class="muted">No bookings yet.</p>') {
+                    list.innerHTML = '<p class="muted">No bookings yet.</p>';
+                }
                 return;
             }
+            if (state.bookingsSnapshot === snapshot) {
+                return;
+            }
+            state.bookingsSnapshot = snapshot;
             list.innerHTML = bookings.map(bookingCard).join("");
+            if (scrollPosition !== null) {
+                window.requestAnimationFrame(() => {
+                    window.scrollTo({top: scrollPosition});
+                });
+            }
         } catch (error) {
+            state.bookingsSnapshot = null;
             list.innerHTML = `<p class="message error">${escapeHtml(error.message)}</p>`;
         }
     }
@@ -1489,7 +1658,7 @@
             try {
                 await apiRequest(`/api/bookings/${bookingId}/`, {method: "DELETE"});
                 showMessage(message, `Booking #${bookingId} deleted. Create a new booking with the correct details.`, false);
-                await loadBookings();
+                await loadBookings(false);
             } catch (error) {
                 showMessage(message, error.message, true);
             }
@@ -1560,13 +1729,13 @@
             });
             await startPaymentFlow();
             showMessage(message, `Booking #${booking.id} created. Follow the payment steps shown to confirm it.`, false);
-            await loadBookings();
+            await loadBookings(false);
         } catch (error) {
             showMessage(message, error.message, true);
         }
     });
 
-    document.getElementById("reload-bookings").addEventListener("click", loadBookings);
+    document.getElementById("reload-bookings").addEventListener("click", () => loadBookings(true));
     document.getElementById("stop-tracking").addEventListener("click", stopTracking);
     document.getElementById("recenter-booking-map").addEventListener("click", recenterBookingMap);
     document.getElementById("recenter-tracking-map").addEventListener("click", recenterTrackingMap);
@@ -1595,8 +1764,8 @@
     renderPlaceSummary("dropoff-selected", "Delivery", null);
     renderRoutePreview();
     renderTrackingSummary();
-    loadBookings();
-    state.bookingsPollId = window.setInterval(loadBookings, 10000);
+    loadBookings(true);
+    state.bookingsPollId = window.setInterval(() => loadBookings(false), 10000);
 
     window.switchTab = function(tabId) {
         document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
@@ -1613,17 +1782,23 @@
         }
 
         if (tabId === 'create') {
-            setTimeout(() => map.invalidateSize(), 50);
+            setTimeout(() => {
+                safeInvalidateMap(map, () => {
+                    updateMarkers();
+                    drawRouteGeometry();
+                    updateMapViewport();
+                });
+            }, 80);
         } else if (tabId === 'track') {
             setTimeout(() => {
                 const trackingMapInstance = ensureTrackingMap();
-                trackingMapInstance.invalidateSize();
+                safeInvalidateMap(trackingMapInstance);
                 if (state.trackedBookingId) {
                     scheduleTrackingMapRender();
                 }
             }, 80);
         } else if (tabId === 'list') {
-            loadBookings();
+            loadBookings(false);
         }
     }
 </script>

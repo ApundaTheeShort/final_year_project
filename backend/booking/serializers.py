@@ -1,5 +1,6 @@
 from decimal import Decimal
 
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from maps.serializers import MapPlaceSelectionSerializer
@@ -85,6 +86,13 @@ class BookingCreateSerializer(serializers.ModelSerializer):
             "payment_status",
             "matched_transporters",
         )
+
+    def validate_weight_kg(self, value):
+        try:
+            determine_vehicle_type(value)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError(exc.message) from exc
+        return value
 
     def create(self, validated_data):
         pickup_place = validated_data.pop("pickup_place")

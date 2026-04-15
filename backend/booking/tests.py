@@ -39,7 +39,7 @@ class BookingFlowTests(TestCase):
         self.vehicle = Vehicle.objects.create(
             transporter=profile,
             registration_number="KDB321B",
-            vehicle_type="pickup",
+            vehicle_type="van",
             capacity_kg="2000.00",
             is_available=True,
         )
@@ -60,13 +60,17 @@ class BookingFlowTests(TestCase):
         self.far_vehicle = Vehicle.objects.create(
             transporter=far_profile,
             registration_number="KDC999Z",
-            vehicle_type="pickup",
+            vehicle_type="van",
             capacity_kg="2500.00",
             is_available=True,
         )
         TransportPricing.objects.update_or_create(
+            vehicle_type="van",
+            defaults={"price_per_km": "250.00", "min_weight_kg": "200.00", "max_weight_kg": "1000.00"},
+        )
+        TransportPricing.objects.update_or_create(
             vehicle_type="pickup",
-            defaults={"price_per_km": "200.00"},
+            defaults={"price_per_km": "200.00", "min_weight_kg": "1000.00", "max_weight_kg": "3000.00"},
         )
 
     def mark_booking_paid(self, booking_id):
@@ -114,14 +118,14 @@ class BookingFlowTests(TestCase):
             format="json",
         )
         self.assertEqual(create_response.status_code, 201)
-        self.assertEqual(create_response.data["vehicle_type_required"], "pickup")
+        self.assertEqual(create_response.data["vehicle_type_required"], "van")
         self.assertEqual(create_response.data["estimated_distance_km"], "12.40")
         self.assertEqual(create_response.data["search_radius_km"], "50.00")
-        self.assertEqual(create_response.data["quoted_price"], "2480.00")
+        self.assertEqual(create_response.data["quoted_price"], "3100.00")
         self.assertEqual(create_response.data["status"], BookingStatus.PENDING_PAYMENT)
         self.assertEqual(create_response.data["payment_status"], BookingPaymentStatus.UNPAID)
         self.assertEqual(len(create_response.data["matched_transporters"]), 2)
-        self.assertEqual(create_response.data["matched_transporters"][0]["estimated_price"], "2480.00")
+        self.assertEqual(create_response.data["matched_transporters"][0]["estimated_price"], "3100.00")
         booking_id = create_response.data["id"]
         self.mark_booking_paid(booking_id)
 
@@ -549,3 +553,44 @@ class BookingFlowTests(TestCase):
         )
         self.assertEqual(delivered_response.status_code, 200)
         self.assertEqual(delivered_response.data["status"], BookingStatus.DELIVERED)
+
+    @patch("booking.serializers.get_route_details")
+    def test_booking_creation_fails_when_no_vehicle_band_matches_weight(self, mocked_route):
+        mocked_route.return_value = {
+            "distance_km": "12.40",
+            "duration_minutes": "21.00",
+            "geometry": {"type": "LineString", "coordinates": [[36.8219, -1.2921], [36.8, -1.3]]},
+        }
+        self.client.force_authenticate(self.farmer)
+        response = self.client.post(
+            "/api/bookings/",
+            {
+                "produce_name": "Heavy maize",
+                "produce_description": "Bulk load",
+                "weight_kg": "5000.00",
+                "pickup_place": {
+                    "place_id": "11",
+                    "source": "nominatim",
+                    "osm_type": "W",
+                    "osm_id": "11",
+                    "name": "Farm Gate",
+                    "address": "Farm Gate, Kiambu",
+                    "latitude": "-1.292100",
+                    "longitude": "36.821900",
+                },
+                "dropoff_place": {
+                    "place_id": "22",
+                    "source": "nominatim",
+                    "osm_type": "W",
+                    "osm_id": "22",
+                    "name": "Depot",
+                    "address": "Depot, Nairobi",
+                    "latitude": "-1.300000",
+                    "longitude": "36.800000",
+                },
+            },
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("No vehicle class is configured for this load weight", str(response.data))

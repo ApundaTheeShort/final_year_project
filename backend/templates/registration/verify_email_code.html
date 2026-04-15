@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Enter Verification Code | FreshHaul{% endblock %}
+
+{% block content %}
+<div style="text-align: center; margin-bottom: 2rem;">
+    <h1>Enter verification code</h1>
+    <p>Enter the 6-digit code sent to your email to finish verifying your account.</p>
+</div>
+
+<form method="post">
+    {% csrf_token %}
+    <p>
+        {{ form.email.label_tag }}
+        {{ form.email }}
+        {% for error in form.email.errors %}
+        <span class="errorlist" style="display: block; margin-top: 0.5rem;">{{ error }}</span>
+        {% endfor %}
+    </p>
+    <p>
+        {{ form.code.label_tag }}
+        {{ form.code }}
+        {% for error in form.code.errors %}
+        <span class="errorlist" style="display: block; margin-top: 0.5rem;">{{ error }}</span>
+        {% endfor %}
+    </p>
+    {% if form.non_field_errors %}
+    <div class="errornote">{{ form.non_field_errors|join:" " }}</div>
+    {% endif %}
+    <button type="submit" style="width: 100%; margin-top: 1rem;">Verify email</button>
+</form>
+
+<div class="links">
+    <a href="{% url 'resend-verification' %}">Resend verification code</a>
+    <a href="{% url 'login' %}">Back to sign in</a>
+</div>
+{% endblock %}

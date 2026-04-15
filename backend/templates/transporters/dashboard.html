@@ -42,6 +42,31 @@
 
     .card-item h3 { margin-bottom: 0.5rem; margin-top: 0; }
 
+    .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1rem;
+    }
+
+    .metric-card {
+        background: rgba(255,255,255,0.8);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-md);
+        padding: 1.25rem;
+    }
+
+    .metric-card h3 {
+        margin: 0 0 0.5rem;
+        font-size: 0.95rem;
+        color: var(--muted);
+    }
+
+    .metric-card p {
+        margin: 0;
+        font-size: 1.5rem;
+        font-weight: 700;
+    }
+
     .modal-backdrop {
         position: fixed;
         inset: 0;
@@ -92,6 +117,7 @@
     <button type="button" class="tab-btn active" onclick="switchTab('jobs')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--accent); border-bottom: 2px solid var(--accent); cursor: pointer; border-radius: 0;">Job Board</button>
     <button type="button" class="tab-btn" onclick="switchTab('route')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Active Routing</button>
     <button type="button" class="tab-btn" onclick="switchTab('profile')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Vehicle Profile</button>
+    <button type="button" class="tab-btn" onclick="switchTab('reports')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Reports</button>
     <button type="button" class="tab-btn" onclick="switchTab('account')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Account Profile</button>
 </div>
 <!-- Tab 1: Job Board -->
@@ -170,6 +196,83 @@
 </div>
 
 <!-- Tab 4: Account Profile -->
+<div id="tab-reports" class="tab-content" style="display: none;">
+    <div class="stack" style="max-width: 1100px; margin: 0 auto; gap: 2rem;">
+        <section class="panel">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
+                <div>
+                    <h2 style="margin: 0;">Delivery Reports</h2>
+                    <p class="muted" style="margin: 0.35rem 0 0;">A summary of your accepted jobs and released earnings.</p>
+                </div>
+                <a href="{% url 'transporter-jobs-report-export' %}" class="btn btn-outline">Download CSV Report</a>
+            </div>
+            <div class="metric-grid">
+                <div class="metric-card">
+                    <h3>Total Jobs</h3>
+                    <p>{{ transporter_report_summary.total_jobs }}</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Active Jobs</h3>
+                    <p>{{ transporter_report_summary.active_jobs }}</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Delivered Jobs</h3>
+                    <p>{{ transporter_report_summary.delivered_jobs }}</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Total Job Value</h3>
+                    <p>KES {{ transporter_report_summary.total_job_value }}</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Pending Release</h3>
+                    <p>KES {{ transporter_report_summary.pending_release }}</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Released Earnings</h3>
+                    <p>KES {{ transporter_report_summary.released_earnings }}</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h3 style="margin-bottom: 1rem;">Recent Job Statement</h3>
+            {% if transporter_recent_jobs %}
+            <div style="overflow-x: auto;">
+                <table style="margin-top: 0;">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Farmer</th>
+                            <th>Produce</th>
+                            <th>Status</th>
+                            <th>Value</th>
+                            <th>Pickup</th>
+                            <th>Dropoff</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for booking in transporter_recent_jobs %}
+                        <tr>
+                            <td>#{{ booking.id }}</td>
+                            <td>{{ booking.farmer.first_name }} {{ booking.farmer.last_name }}</td>
+                            <td>{{ booking.produce_name }}</td>
+                            <td>{{ booking.get_status_display }}</td>
+                            <td>KES {{ booking.quoted_price|default:"0.00" }}</td>
+                            <td>{{ booking.pickup_address }}</td>
+                            <td>{{ booking.dropoff_address }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="muted">Your report will appear here after you accept your first job.</p>
+            {% endif %}
+        </section>
+    </div>
+</div>
+
+<!-- Tab 5: Account Profile -->
 <div id="tab-account" class="tab-content" style="display: none;">
     <section class="panel" style="max-width: 600px; margin: 0 auto; padding: 2rem;">
         <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 2rem;">
@@ -252,10 +355,9 @@
             <div class="grid grid-2" style="gap: 1.5rem;">
                 <label>Vehicle Type
                     <select name="vehicle_type" required style="padding: 1rem; font-size: 1.05rem; margin-top: 0.5rem;">
-                        <option value="motorbike">Motorbike</option>
-                        <option value="pickup">Pickup</option>
-                        <option value="van">Van</option>
-                        <option value="truck">Truck</option>
+                        {% for option in vehicle_type_options %}
+                        <option value="{{ option.value }}">{{ option.label }}</option>
+                        {% endfor %}
                     </select>
                 </label>
                 <label>Max Capacity (kg)
@@ -281,6 +383,14 @@
     crossorigin=""
 ></script>
 <script>
+    const vehicleTypeOptions = [
+        {% for option in vehicle_type_options %}
+        {value: "{{ option.value|escapejs }}", label: "{{ option.label|escapejs }}"},
+        {% endfor %}
+    ];
+    const defaultVehicleType = vehicleTypeOptions[0]?.value || "";
+    const vehicleTypeLabels = Object.fromEntries(vehicleTypeOptions.map((option) => [option.value, option.label]));
+
     const csrfToken = document.cookie
         .split("; ")
         .find((row) => row.startsWith("csrftoken="))
@@ -582,24 +692,18 @@
         const form = document.getElementById("vehicle-form");
         if (!vehicle) {
             form.reset();
-            form.querySelector('[name="vehicle_type"]').value = "pickup";
+            form.querySelector('[name="vehicle_type"]').value = defaultVehicleType;
             form.querySelector('[name="is_available"]').value = "true";
             return;
         }
         form.querySelector('[name="registration_number"]').value = vehicle.registration_number || "";
-        form.querySelector('[name="vehicle_type"]').value = vehicle.vehicle_type || "pickup";
+        form.querySelector('[name="vehicle_type"]').value = vehicle.vehicle_type || defaultVehicleType;
         form.querySelector('[name="capacity_kg"]').value = vehicle.capacity_kg || "";
         form.querySelector('[name="is_available"]').value = vehicle.is_available ? "true" : "false";
     }
 
     function formatVehicleType(vehicleType) {
-        const labels = {
-            motorbike: "Motorbike",
-            pickup: "Pickup",
-            van: "Van",
-            truck: "Truck",
-        };
-        return labels[vehicleType] || "Not set";
+        return vehicleTypeLabels[vehicleType] || "Not set";
     }
 
     function populateVehicleSummary() {

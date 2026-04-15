@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 
 {% block title %}Sign In | FreshHaul{% endblock %}
+{% block page_class %}auth-wide{% endblock %}
 
 {% block content %}
 <div style="text-align: center; margin-bottom: 2rem;">
@@ -44,7 +45,7 @@
 
 <div class="links">
     <a href="{% url 'signup' %}">Don't have an account? Sign up</a>
-    <a href="{% url 'resend-verification' %}" style="color: var(--muted); font-size: 0.95rem;">Resend verification email</a>
+    <a href="{% url 'resend-verification' %}" style="color: var(--muted); font-size: 0.95rem;">Resend verification code</a>
     <a href="{% url 'password_reset' %}" style="color: var(--muted); font-size: 0.95rem;">Forgot your password?</a>
 </div>
 {% endblock %}

@@ -43,7 +43,10 @@ class PaymentFlowTests(TestCase):
             role="driver",
             is_email_verified=True,
         )
-        TransportPricing.objects.update_or_create(vehicle_type="pickup", defaults={"price_per_km": "200.00"})
+        TransportPricing.objects.update_or_create(
+            vehicle_type="pickup",
+            defaults={"price_per_km": "200.00", "min_weight_kg": "1000.00", "max_weight_kg": "3000.00"},
+        )
         self.booking = Booking.objects.create(
             farmer=self.farmer,
             produce_name="Tomatoes",
@@ -169,4 +172,3 @@ class PaymentFlowTests(TestCase):
         self.assertEqual(payment.status, PaymentStatus.RELEASED)
         self.assertEqual(payout.status, PayoutStatus.RELEASED)
         self.assertIsNotNone(payout.released_at)
-

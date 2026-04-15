@@ -1,7 +1,9 @@
 Hello {{ user.first_name }},
 
-Verify your email address for {{ site_name }} by opening the link below:
+Use this code to verify your email address for {{ site_name }}:
 
-{{ verification_url }}
+{{ verification_code }}
+
+This code expires in {{ verification_expires_minutes }} minutes.
 
 If you did not create this account, you can ignore this email.

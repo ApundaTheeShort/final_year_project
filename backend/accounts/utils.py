@@ -1,24 +1,44 @@
+import secrets
+from datetime import timedelta
+
 from django.conf import settings
-from django.contrib.auth.tokens import default_token_generator
 from django.contrib.sites.shortcuts import get_current_site
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
-from django.urls import reverse
 from django.utils import timezone
-from django.utils.encoding import force_bytes
-from django.utils.http import urlsafe_base64_encode
 
 
-def build_email_verification_link(request, user):
-    uid = urlsafe_base64_encode(force_bytes(user.pk))
-    token = default_token_generator.make_token(user)
-    path = reverse("verify-email", kwargs={"uidb64": uid, "token": token})
-    return request.build_absolute_uri(path)
+EMAIL_VERIFICATION_CODE_TTL_MINUTES = 10
+
+
+def generate_email_verification_code():
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+def set_email_verification_code(user):
+    code = generate_email_verification_code()
+    user.email_verification_code = code
+    user.email_verification_sent_at = timezone.now()
+    user.email_verification_expires_at = timezone.now() + timedelta(minutes=EMAIL_VERIFICATION_CODE_TTL_MINUTES)
+    user.save(
+        update_fields=[
+            "email_verification_code",
+            "email_verification_sent_at",
+            "email_verification_expires_at",
+        ]
+    )
+    return code
+
+
+def clear_email_verification_code(user):
+    user.email_verification_code = ""
+    user.email_verification_expires_at = None
+    user.save(update_fields=["email_verification_code", "email_verification_expires_at"])
 
 
 def send_verification_email(request, user):
     current_site = get_current_site(request)
-    verification_url = build_email_verification_link(request, user)
+    code = set_email_verification_code(user)
     subject = render_to_string(
         "registration/email_verification_subject.txt",
         {"site_name": current_site.name},
@@ -29,7 +49,8 @@ def send_verification_email(request, user):
             "user": user,
             "site_name": current_site.name,
             "domain": current_site.domain,
-            "verification_url": verification_url,
+            "verification_code": code,
+            "verification_expires_minutes": EMAIL_VERIFICATION_CODE_TTL_MINUTES,
         },
     )
     send_mail(
@@ -38,5 +59,28 @@ def send_verification_email(request, user):
         from_email=settings.DEFAULT_FROM_EMAIL,
         recipient_list=[user.email],
     )
-    user.email_verification_sent_at = timezone.now()
-    user.save(update_fields=["email_verification_sent_at"])
+
+
+def verify_email_code(user, code):
+    if user.is_email_verified:
+        return False, "This email address has already been verified."
+    if not user.email_verification_code:
+        return False, "Request a new verification code and try again."
+    if not user.email_verification_expires_at or user.email_verification_expires_at < timezone.now():
+        return False, "This verification code has expired. Request a new one and try again."
+    if user.email_verification_code != code:
+        return False, "That verification code is not correct. Check your email and try again."
+
+    user.is_email_verified = True
+    user.email_verified_at = timezone.now()
+    user.email_verification_code = ""
+    user.email_verification_expires_at = None
+    user.save(
+        update_fields=[
+            "is_email_verified",
+            "email_verified_at",
+            "email_verification_code",
+            "email_verification_expires_at",
+        ]
+    )
+    return True, None

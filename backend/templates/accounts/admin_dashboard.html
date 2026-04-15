@@ -137,6 +137,7 @@
     <button type="button" class="tab-btn active" onclick="switchTab('metrics')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--accent); border-bottom: 2px solid var(--accent); cursor: pointer; border-radius: 0;">Revenue Metrics</button>
     <button type="button" class="tab-btn" onclick="switchTab('bookings')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Bookings</button>
     <button type="button" class="tab-btn" onclick="switchTab('pricing')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Pricing & Rates</button>
+    <button type="button" class="tab-btn" onclick="switchTab('reports')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Reports</button>
     <button type="button" class="tab-btn" onclick="switchTab('account')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Account Settings</button>
 </div>
 <!-- Tab 1: Metrics -->
@@ -187,7 +188,7 @@
                     <tbody>
                         {% for item in bookings_by_vehicle %}
                         <tr>
-                            <td style="font-weight: 500;">{{ item.vehicle_type_required|title }}</td>
+                            <td style="font-weight: 500;">{{ item.vehicle_type_label }}</td>
                             <td>{{ item.bookings }}</td>
                             <td>KES {{ item.revenue }}</td>
                         </tr>
@@ -329,29 +330,77 @@
                 <div style="background: var(--accent); color: white; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.2rem;">💰</div>
                 <div>
                     <h2 style="margin: 0;">Configure Transport Rates</h2>
-                    <p class="muted" style="margin: 0; font-size: 0.9rem;">Update the base per-km fees for each vehicle class. These directly impact new booking quotes.</p>
+                    <p class="muted" style="margin: 0; font-size: 0.9rem;">Update existing vehicle types or add new ones with their rate and booking weight band.</p>
                 </div>
             </div>
-            
+            <div class="stack" style="gap: 1rem;">
+                {% for rate in current_rates %}
+                <form method="post" action="{% url 'admin-dashboard' %}" class="panel" style="padding: 1rem;">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="update-transport-rule">
+                    <input type="hidden" name="rule_id" value="{{ rate.rule.id }}">
+                    <div class="row" style="justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h4 style="margin: 0;">{{ rate.label }}</h4>
+                        <button type="submit" class="btn btn-outline">Save Changes</button>
+                    </div>
+                    <div class="grid grid-2" style="gap: 1rem;">
+                        <label>Vehicle Type
+                            {{ rate.form.vehicle_type }}
+                        </label>
+                        <label>Rate (KES / km)
+                            {{ rate.form.price_per_km }}
+                        </label>
+                        <label>Min Weight (kg)
+                            {{ rate.form.min_weight_kg }}
+                        </label>
+                        <label>Max Weight (kg)
+                            {{ rate.form.max_weight_kg }}
+                        </label>
+                    </div>
+                    {% if rate.form.errors %}
+                    <div class="stack" style="margin-top: 1rem;">
+                        {% for field, errors in rate.form.errors.items %}
+                        {% for error in errors %}
+                        <p class="message error">{{ error }}</p>
+                        {% endfor %}
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+                </form>
+                {% endfor %}
+            </div>
+        </section>
+
+        <section class="panel" style="padding: 2rem;">
+            <h3 style="margin-bottom: 1rem;">Add New Vehicle Type</h3>
             <form method="post" action="{% url 'admin-dashboard' %}" class="stack">
                 {% csrf_token %}
-                <input type="hidden" name="action" value="update-rates">
-                <div class="grid grid-2" style="gap: 1.5rem;">
-                    <label>Motorbike (per km)
-                        {{ rate_form.motorbike }}
+                <input type="hidden" name="action" value="create-transport-rule">
+                <div class="grid grid-2" style="gap: 1rem;">
+                    <label>Vehicle Type
+                        {{ new_rule_form.vehicle_type }}
                     </label>
-                    <label>Pickup (per km)
-                        {{ rate_form.pickup }}
+                    <label>Rate (KES / km)
+                        {{ new_rule_form.price_per_km }}
                     </label>
-                    <label>Van (per km)
-                        {{ rate_form.van }}
+                    <label>Min Weight (kg)
+                        {{ new_rule_form.min_weight_kg }}
                     </label>
-                    <label>Truck (per km)
-                        {{ rate_form.truck }}
+                    <label>Max Weight (kg)
+                        {{ new_rule_form.max_weight_kg }}
                     </label>
                 </div>
-                <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); display: flex; justify-content: flex-end;">
-                     <button type="submit" class="btn" style="padding: 1rem 2.5rem; font-size: 1.1rem; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.4);">Apply Global Rate Changes</button>
+                {% if new_rule_form.errors %}
+                <div class="stack">
+                    {% for field, errors in new_rule_form.errors.items %}
+                    {% for error in errors %}
+                    <p class="message error">{{ error }}</p>
+                    {% endfor %}
+                    {% endfor %}
+                </div>
+                {% endif %}
+                <div style="display: flex; justify-content: flex-end;">
+                    <button type="submit" class="btn">Add Vehicle Type</button>
                 </div>
             </form>
         </section>
@@ -363,6 +412,7 @@
                     <thead>
                         <tr>
                             <th>Vehicle Class</th>
+                            <th>Booking Weight Band</th>
                             <th>Rate (KES / km)</th>
                         </tr>
                     </thead>
@@ -370,12 +420,84 @@
                         {% for rate in current_rates %}
                         <tr>
                             <td style="font-weight: 500; font-size: 1.05rem;">{{ rate.label }}</td>
+                            <td>{{ rate.min_weight_kg }} kg to {{ rate.max_weight_kg }} kg</td>
                             <td style="font-family: monospace; font-size: 1.1rem;">KES {{ rate.price_per_km }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
             </div>
+        </section>
+    </div>
+</div>
+
+<div id="tab-reports" class="tab-content" style="display: none;">
+    <div class="stack" style="max-width: 1100px; margin: 0 auto; gap: 2rem;">
+        <section class="panel">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem;">
+                <div>
+                    <h2 style="margin: 0;">System Reports</h2>
+                    <p class="muted" style="margin: 0.35rem 0 0;">Download current booking and rate data for external review.</p>
+                </div>
+                <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                    <a href="{% url 'admin-bookings-report-export' %}" class="btn btn-outline">Bookings CSV</a>
+                    <a href="{% url 'admin-rates-report-export' %}" class="btn btn-outline">Rates CSV</a>
+                </div>
+            </div>
+            <div class="metric-grid">
+                <div class="metric-card">
+                    <h3>Bookings Ready For Export</h3>
+                    <p>{{ booking_summary.total_bookings }}</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Vehicle Classes Configured</h3>
+                    <p>{{ current_rates|length }}</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Active Deliveries</h3>
+                    <p>{{ booking_summary.active_bookings }}</p>
+                </div>
+                <div class="metric-card">
+                    <h3>Collected Revenue</h3>
+                    <p>KES {{ booking_summary.delivered_revenue }}</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel" style="padding: 1.5rem;">
+            <h3 style="margin-bottom: 1rem;">Recently Delivered Bookings</h3>
+            {% if recent_delivered_bookings %}
+            <div style="overflow-x: auto;">
+                <table style="margin-top: 0;">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Produce</th>
+                            <th>Farmer</th>
+                            <th>Transporter</th>
+                            <th>Vehicle</th>
+                            <th>Price</th>
+                            <th>Delivered</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for booking in recent_delivered_bookings %}
+                        <tr>
+                            <td>#{{ booking.id }}</td>
+                            <td>{{ booking.produce_name }}</td>
+                            <td>{{ booking.farmer.first_name }} {{ booking.farmer.last_name }}</td>
+                            <td>{% if booking.transporter %}{{ booking.transporter.first_name }} {{ booking.transporter.last_name }}{% else %}<span class="muted">Unassigned</span>{% endif %}</td>
+                            <td>{{ booking.get_vehicle_type_required_display }}</td>
+                            <td>KES {{ booking.quoted_price|default:"0.00" }}</td>
+                            <td>{% if booking.delivered_at %}{{ booking.delivered_at|date:"Y-m-d H:i" }}{% else %}<span class="muted">Not set</span>{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="muted">Delivered bookings will appear here as the system starts completing trips.</p>
+            {% endif %}
         </section>
     </div>
 </div>

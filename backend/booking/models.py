@@ -5,7 +5,7 @@ from django.conf import settings
 from django.core.exceptions import ValidationError
 from django.db import models
 
-from transporters.models import VEHICLE_WEIGHT_RULES, Vehicle, VehicleType
+from transporters.models import Vehicle, format_vehicle_type_label, resolve_vehicle_type_for_weight
 
 
 def haversine_distance(lat1, lon1, lat2, lon2):
@@ -20,11 +20,7 @@ def haversine_distance(lat1, lon1, lat2, lon2):
 
 
 def determine_vehicle_type(weight_kg):
-    weight = Decimal(str(weight_kg))
-    for vehicle_type, max_weight in VEHICLE_WEIGHT_RULES:
-        if weight <= max_weight:
-            return vehicle_type
-    return VehicleType.TRUCK
+    return resolve_vehicle_type_for_weight(weight_kg)
 
 
 class BookingStatus(models.TextChoices):
@@ -82,7 +78,7 @@ class Booking(models.Model):
     estimated_distance_km = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     estimated_duration_minutes = models.DecimalField(max_digits=8, decimal_places=2, blank=True, null=True)
     route_geometry = models.JSONField(null=True, blank=True)
-    vehicle_type_required = models.CharField(max_length=20, choices=VehicleType.choices)
+    vehicle_type_required = models.CharField(max_length=50)
     quoted_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
     status = models.CharField(max_length=20, choices=BookingStatus.choices, default=BookingStatus.PENDING_PAYMENT)
     payment_status = models.CharField(
@@ -128,6 +124,9 @@ class Booking(models.Model):
 
     def __str__(self):
         return f"Booking {self.id} - {self.produce_name}"
+
+    def get_vehicle_type_required_display(self):
+        return format_vehicle_type_label(self.vehicle_type_required)
 
 
 class BookingStatusHistory(models.Model):

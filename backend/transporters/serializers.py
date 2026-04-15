@@ -1,6 +1,11 @@
 from rest_framework import serializers
 
-from .models import TransporterProfile, Vehicle
+from .models import (
+    TransporterProfile,
+    Vehicle,
+    get_transport_rules,
+    normalize_vehicle_type_key,
+)
 
 
 class TransporterProfileSerializer(serializers.ModelSerializer):
@@ -31,6 +36,13 @@ class VehicleSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             "registration_number": {"validators": []},
         }
+
+    def validate_vehicle_type(self, value):
+        vehicle_type = normalize_vehicle_type_key(value)
+        available_types = {rule.vehicle_type for rule in get_transport_rules()}
+        if vehicle_type not in available_types:
+            raise serializers.ValidationError("Choose a vehicle type that has been configured by the system admin.")
+        return vehicle_type
 
 
 class DriverVehicleSetupSerializer(serializers.Serializer):

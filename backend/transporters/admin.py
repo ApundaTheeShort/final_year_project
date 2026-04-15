@@ -18,5 +18,5 @@ class VehicleAdmin(admin.ModelAdmin):
 
 @admin.register(TransportPricing)
 class TransportPricingAdmin(admin.ModelAdmin):
-    list_display = ("vehicle_type", "price_per_km", "updated_at")
+    list_display = ("vehicle_type", "min_weight_kg", "max_weight_kg", "price_per_km", "updated_at")
     list_filter = ("vehicle_type",)

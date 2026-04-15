@@ -54,6 +54,8 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     is_email_verified = models.BooleanField(default=False)
     email_verified_at = models.DateTimeField(null=True, blank=True)
     email_verification_sent_at = models.DateTimeField(null=True, blank=True)
+    email_verification_code = models.CharField(max_length=6, blank=True)
+    email_verification_expires_at = models.DateTimeField(null=True, blank=True)
 
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)

@@ -1,5 +1,6 @@
 import csv
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.db.models import Count, DecimalField, Q, Sum, Value
@@ -92,10 +93,12 @@ def build_csv_response(filename, headers, rows):
     return response
 
 
-class HomeView(LoginRequiredMixin, TemplateView):
+class HomeView(TemplateView):
     template_name = 'accounts/home.html'
 
     def get_template_names(self):
+        if not self.request.user.is_authenticated:
+            return ["accounts/landing.html"]
         if self.request.user.is_staff:
             return ["accounts/admin_dashboard.html"]
         role_templates = {
@@ -106,6 +109,27 @@ class HomeView(LoginRequiredMixin, TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        if not self.request.user.is_authenticated:
+            context["landing_metrics"] = {
+                "vehicle_classes": len(get_transport_rules()),
+                "active_routes": Booking.objects.filter(
+                    status__in=[
+                        BookingStatus.CONFIRMED,
+                        BookingStatus.ACCEPTED,
+                        BookingStatus.PICKED_UP,
+                        BookingStatus.IN_TRANSIT,
+                    ]
+                ).count(),
+                "delivered_bookings": Booking.objects.filter(
+                    status__in=[BookingStatus.DELIVERED, BookingStatus.COMPLETED]
+                ).count(),
+                "registered_transporters": User.objects.filter(role="driver").count(),
+            }
+            context["site_name"] = settings.SITE_NAME
+            context["site_support_email"] = settings.SITE_SUPPORT_EMAIL
+            context["site_support_phone"] = settings.SITE_SUPPORT_PHONE
+            context["site_tagline"] = settings.SITE_TAGLINE
+            return context
         context["profile_form"] = ProfileAccountForm(instance=self.request.user)
         if self.request.user.is_staff:
             context.update(AdminDashboardView.build_dashboard_context())

@@ -246,3 +246,11 @@ MPESA_CALLBACK_URL = os.getenv("MPESA_CALLBACK_URL", "")
 MPESA_INITIATOR_NAME = os.getenv("MPESA_INITIATOR_NAME", "")
 MPESA_TIMEOUT_SECONDS = int(os.getenv("MPESA_TIMEOUT_SECONDS", "30"))
 PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "")
+
+SITE_NAME = os.getenv("SITE_NAME", "FreshHaul")
+SITE_SUPPORT_EMAIL = os.getenv("SITE_SUPPORT_EMAIL", "help@freshhaul.com")
+SITE_SUPPORT_PHONE = os.getenv("SITE_SUPPORT_PHONE", "+254 700 000 000")
+SITE_TAGLINE = os.getenv(
+    "SITE_TAGLINE",
+    "Produce transport support for farmers and transporters",
+)

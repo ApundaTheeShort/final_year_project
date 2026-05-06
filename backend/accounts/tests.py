@@ -196,6 +196,33 @@ class AdminDashboardTests(TestCase):
         self.assertContains(response, f"Booking #{booking.id} has been deleted.")
 
 
+class LandingPageTests(TestCase):
+    def test_anonymous_user_sees_public_landing_page(self):
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Safe and reliable produce transport")
+        self.assertContains(response, "Services")
+        self.assertContains(response, "How It Works")
+
+    def test_authenticated_farmer_still_gets_dashboard(self):
+        farmer = User.objects.create_user(
+            phone_number="0700000109",
+            email="landing@example.com",
+            password="StrongPass123",
+            first_name="Landing",
+            last_name="Farmer",
+            role="farmer",
+            is_email_verified=True,
+        )
+        self.client.force_login(farmer)
+
+        response = self.client.get("/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Dispatch Dashboard")
+
+
 class CustomUserAuthTests(TestCase):
     def test_create_superuser_sets_admin_permissions_and_role(self):
         admin = User.objects.create_superuser(

@@ -1,0 +1,396 @@
+# FreshHaul System Diagrams
+
+This file groups the main diagrams that describe the FreshHaul platform from business, software, data, and deployment perspectives.
+
+## 1. System Context Diagram
+
+Description: Shows the main users, the FreshHaul platform, and the external services it depends on.
+
+```mermaid
+flowchart LR
+    Farmer[Farmer]
+    Driver[Driver / Transporter]
+    Admin[Admin / Staff]
+
+    System[FreshHaul Platform]
+
+    Maps[Mapping Services\nOpenStreetMap / Nominatim / OSRM]
+    Daraja[Safaricom Daraja]
+    Email[SMTP Email Provider]
+    DB[(SQLite / PostgreSQL)]
+
+    Farmer -->|Create bookings,\ntrack deliveries,\npay for transport| System
+    Driver -->|Manage vehicles,\naccept jobs,\nupdate delivery status| System
+    Admin -->|Manage pricing,\nreview reports,\nmonitor bookings| System
+
+    System -->|Place search,\nreverse geocoding,\nroute preview| Maps
+    System -->|STK Push,\npayment callback| Daraja
+    System -->|Verification email,\npassword reset email| Email
+    System --> DB
+```
+
+## 2. Container / Runtime Architecture Diagram
+
+Description: Shows the main runtime pieces of the web application and how requests move through the stack.
+
+```mermaid
+flowchart TD
+    Browser[Browser Client]
+
+    subgraph App[FreshHaul Django Application]
+        Templates[Django Templates]
+        API[DRF API Endpoints]
+        Accounts[Accounts App]
+        Booking[Booking App]
+        Transporters[Transporters App]
+        Payments[Payments App]
+        Maps[Maps App]
+    end
+
+    Database[(SQLite / PostgreSQL)]
+    OSM[OpenStreetMap Tiles]
+    Nominatim[Nominatim]
+    OSRM[OSRM]
+    Daraja[Safaricom Daraja]
+    SMTP[SMTP Provider]
+
+    Browser --> Templates
+    Browser --> API
+
+    Templates --> Accounts
+    Templates --> Booking
+    Templates --> Transporters
+    Templates --> Payments
+
+    API --> Accounts
+    API --> Booking
+    API --> Transporters
+    API --> Payments
+    API --> Maps
+
+    Accounts --> Database
+    Booking --> Database
+    Transporters --> Database
+    Payments --> Database
+    Maps --> Nominatim
+    Maps --> OSRM
+    Templates --> OSM
+    Payments --> Daraja
+    Accounts --> SMTP
+```
+
+## 3. Application Component Diagram
+
+Description: Shows the major internal backend modules and the responsibilities delegated to each one.
+
+```mermaid
+flowchart LR
+    Home[HomeView / Dashboards]
+    Auth[Authentication + Verification]
+    Pricing[Transport Pricing Rules]
+    Matching[Progressive Transporter Matching]
+    BookingFlow[Booking Lifecycle]
+    Tracking[Tracking Updates]
+    PaymentFlow[STK Push + Callback + Payout]
+    Reports[CSV Reports + Admin Metrics]
+
+    AccountsApp[accounts]
+    BookingApp[booking]
+    TransportersApp[transporters]
+    PaymentsApp[payments]
+    MapsApp[maps]
+
+    Home --> AccountsApp
+    Auth --> AccountsApp
+    Pricing --> TransportersApp
+    Matching --> BookingApp
+    BookingFlow --> BookingApp
+    Tracking --> BookingApp
+    PaymentFlow --> PaymentsApp
+    Reports --> AccountsApp
+
+    BookingApp --> MapsApp
+    BookingApp --> TransportersApp
+    PaymentsApp --> BookingApp
+    AccountsApp --> BookingApp
+    AccountsApp --> PaymentsApp
+```
+
+## 4. Booking And Payment Sequence Diagram
+
+Description: Shows the main end-to-end business flow from booking creation to payment confirmation and driver assignment.
+
+```mermaid
+sequenceDiagram
+    actor Farmer
+    participant UI as Farmer Dashboard
+    participant BookingAPI as Booking API
+    participant Maps as Maps Service
+    participant DB as Database
+    participant PaymentAPI as Payments API
+    participant Daraja as Safaricom Daraja
+    actor Driver
+    participant DriverAPI as Driver APIs
+
+    Farmer->>UI: Enter produce, pickup, dropoff
+    UI->>Maps: Preview route / resolve places
+    Maps-->>UI: Distance, duration, geometry
+    UI->>BookingAPI: Create booking
+    BookingAPI->>DB: Save booking as pending_payment
+    DB-->>BookingAPI: Booking created
+    BookingAPI-->>UI: Quote, vehicle type, matched transporters
+
+    Farmer->>UI: Start payment
+    UI->>PaymentAPI: POST /api/payments/stk-push/
+    PaymentAPI->>Daraja: Initiate STK Push
+    Daraja-->>PaymentAPI: STK request accepted
+    PaymentAPI->>DB: Save payment as stk_push_sent
+    PaymentAPI-->>UI: Prompt user to complete payment
+
+    Daraja->>PaymentAPI: Payment callback
+    PaymentAPI->>DB: Mark payment paid_held
+    PaymentAPI->>DB: Mark booking confirmed / paid
+
+    Driver->>DriverAPI: Load open jobs
+    DriverAPI->>DB: Query confirmed + matching jobs
+    DB-->>DriverAPI: Matching bookings
+    DriverAPI-->>Driver: Show available jobs
+
+    Driver->>DriverAPI: Accept booking with vehicle
+    DriverAPI->>DB: Assign transporter + vehicle
+    DriverAPI->>DB: Update booking to accepted
+    DriverAPI-->>Driver: Booking accepted
+```
+
+## 5. Delivery Execution Sequence Diagram
+
+Description: Shows how the assigned driver progresses the trip from pickup to delivery and how payout release logic is triggered.
+
+```mermaid
+sequenceDiagram
+    actor Driver
+    participant DriverUI as Driver Dashboard
+    participant TransporterAPI as Transporter API
+    participant BookingAPI as Booking API
+    participant DB as Database
+    actor Farmer
+    participant FarmerUI as Farmer Dashboard
+
+    Driver->>TransporterAPI: PATCH live location
+    TransporterAPI->>DB: Update transporter profile coordinates
+
+    Driver->>DriverUI: Mark picked up
+    DriverUI->>BookingAPI: POST status = picked_up
+    BookingAPI->>DB: Validate location near pickup
+    BookingAPI->>DB: Update booking + status history
+    BookingAPI-->>DriverUI: Pickup confirmed
+
+    Driver->>TransporterAPI: Send tracking updates while moving
+    TransporterAPI->>DB: Save latest location
+    DriverUI->>BookingAPI: POST tracking update
+    BookingAPI->>DB: Save tracking record
+
+    FarmerUI->>BookingAPI: GET tracking details
+    BookingAPI->>DB: Read booking + tracking history
+    BookingAPI-->>FarmerUI: Route and current delivery state
+
+    Driver->>DriverUI: Mark delivered
+    DriverUI->>BookingAPI: POST status = delivered
+    BookingAPI->>DB: Validate location near dropoff
+    BookingAPI->>DB: Update booking delivered
+    BookingAPI->>DB: Trigger payment release / payout update
+    BookingAPI-->>DriverUI: Delivery confirmed
+    BookingAPI-->>FarmerUI: Final trip state available
+```
+
+## 6. Booking State Diagram
+
+Description: Shows the lifecycle states a booking can move through in the backend.
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending_payment
+    pending_payment --> confirmed : successful payment
+    pending_payment --> cancelled : cancellation / invalidation
+    confirmed --> accepted : driver accepts
+    confirmed --> declined : driver declines event recorded
+    accepted --> picked_up : driver at pickup
+    picked_up --> in_transit : trip progression
+    in_transit --> delivered : driver at dropoff
+    delivered --> completed : completion / payout release finalization
+    cancelled --> [*]
+    completed --> [*]
+```
+
+## 7. Payment State Diagram
+
+Description: Shows how a payment record progresses from initiation to held funds and final release.
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending
+    pending --> stk_push_sent : STK initiated
+    stk_push_sent --> paid_held : callback success
+    stk_push_sent --> failed : callback failure
+    stk_push_sent --> cancelled : user / provider cancellation
+    paid_held --> released : delivery completed
+    failed --> [*]
+    cancelled --> [*]
+    released --> [*]
+```
+
+## 8. Entity Relationship Diagram
+
+Description: Shows the main persistent entities and how they relate in the database.
+
+```mermaid
+erDiagram
+    CUSTOM_USER ||--o{ BOOKING : creates
+    CUSTOM_USER ||--o{ BOOKING : assigned_to
+    CUSTOM_USER ||--|| TRANSPORTER_PROFILE : owns
+    TRANSPORTER_PROFILE ||--o{ VEHICLE : owns
+    VEHICLE ||--o{ BOOKING : used_for
+    BOOKING ||--o{ BOOKING_STATUS_HISTORY : records
+    BOOKING ||--o{ TRACKING_UPDATE : has
+    CUSTOM_USER ||--o{ TRACKING_UPDATE : sends
+    BOOKING ||--|| PAYMENT : has
+    PAYMENT ||--|| TRANSPORTER_PAYOUT : releases_to
+    PAYMENT ||--o{ PAYMENT_STATUS_HISTORY : records
+    CUSTOM_USER ||--o{ PAYMENT : pays
+    CUSTOM_USER ||--o{ PAYMENT : receives
+    CUSTOM_USER ||--o{ TRANSPORTER_PAYOUT : receives
+
+    CUSTOM_USER {
+        int id
+        string phone_number
+        string email
+        string role
+        bool is_email_verified
+    }
+
+    TRANSPORTER_PROFILE {
+        int id
+        int user_id
+        string company_name
+        decimal current_latitude
+        decimal current_longitude
+        datetime last_location_update
+    }
+
+    VEHICLE {
+        int id
+        int transporter_id
+        string registration_number
+        string vehicle_type
+        decimal capacity_kg
+        bool is_available
+    }
+
+    BOOKING {
+        int id
+        int farmer_id
+        int transporter_id
+        int vehicle_id
+        string produce_name
+        decimal weight_kg
+        decimal quoted_price
+        string status
+        string payment_status
+    }
+
+    BOOKING_STATUS_HISTORY {
+        int id
+        int booking_id
+        string status
+        string notes
+        datetime created_at
+    }
+
+    TRACKING_UPDATE {
+        int id
+        int booking_id
+        int transporter_id
+        decimal latitude
+        decimal longitude
+        decimal speed_kph
+        datetime created_at
+    }
+
+    PAYMENT {
+        int id
+        int booking_id
+        int farmer_id
+        int transporter_id
+        decimal amount_kes
+        string status
+        string mpesa_receipt_number
+    }
+
+    TRANSPORTER_PAYOUT {
+        int id
+        int booking_id
+        int transporter_id
+        int payment_id
+        decimal amount_kes
+        string status
+    }
+
+    PAYMENT_STATUS_HISTORY {
+        int id
+        int payment_id
+        string status
+        string notes
+        datetime created_at
+    }
+```
+
+## 9. Role Access Matrix Diagram
+
+Description: Summarizes which actors are responsible for the main operations in the system.
+
+```mermaid
+flowchart TD
+    Farmer[Farmer]
+    Driver[Driver]
+    Admin[Admin]
+
+    B1[Create Booking]
+    B2[Delete Unpaid Booking]
+    B3[Track Delivery]
+    B4[Initiate Payment]
+    D1[Manage Vehicles]
+    D2[Update Live Location]
+    D3[Accept Booking]
+    D4[Mark Pickup / Delivery]
+    A1[Manage Pricing Bands]
+    A2[Review Reports]
+    A3[Manage Booking Oversight]
+
+    Farmer --> B1
+    Farmer --> B2
+    Farmer --> B3
+    Farmer --> B4
+
+    Driver --> D1
+    Driver --> D2
+    Driver --> D3
+    Driver --> D4
+
+    Admin --> A1
+    Admin --> A2
+    Admin --> A3
+```
+
+## 10. Deployment Diagram
+
+Description: Shows the current Docker-oriented deployment setup used for local or simple hosted environments.
+
+```mermaid
+flowchart LR
+    User[User Browser] --> Web[web container\nDjango app]
+    Adminer[Adminer UI] --> DB[(db container\nPostgreSQL)]
+    Web --> DB
+    Web --> Maps[External Map Services]
+    Web --> Daraja[Safaricom Daraja]
+    Web --> Email[SMTP Provider]
+```

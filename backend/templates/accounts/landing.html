@@ -4,14 +4,7 @@
 {% block title %}{{ site_name }} | Farm Produce Transport{% endblock %}
 {% block page_class %}wide{% endblock %}
 {% block card_class %}landing-card{% endblock %}
-{% block navbar_class %}public-navbar landing-navbar{% endblock %}
-{% block navbar_links %}
-<a href="#about">About</a>
-<a href="#services">Services</a>
-<a href="#how-it-works">How It Works</a>
-<a href="{% url 'login' %}">Sign In</a>
-<a href="{% url 'signup' %}" class="btn" style="margin-left: 1rem;">Create Account</a>
-{% endblock %}
+
 
 {% block extra_head %}
 <style>
@@ -20,598 +13,205 @@
         background: transparent;
         border: 0;
         box-shadow: none;
-        backdrop-filter: none;
-        -webkit-backdrop-filter: none;
     }
 
-    .landing-topbar {
-        width: min(100% - 2rem, 1180px);
-        margin: 0.75rem auto 0;
-        background: #5b178f;
-        color: #fff;
-        border-radius: 0.75rem 0.75rem 0 0;
-        padding: 0.55rem 1rem;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 1rem;
-        font-size: 0.88rem;
+    .hero-section {
+        text-align: center;
+        padding: 8rem 2rem;
+        background: 
+            linear-gradient(rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.85)),
+            url("https://images.pexels.com/photos/10041310/pexels-photo-10041310.jpeg?cs=srgb&dl=pexels-cristian-rojas-10041310.jpg&fm=jpg") center/cover no-repeat;
+        border-radius: var(--radius-lg);
+        margin-bottom: 3rem;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        color: #ffffff;
+        box-shadow: 0 20px 40px -20px rgba(15, 23, 42, 0.5);
     }
 
-    .landing-topbar p {
-        color: inherit;
-        margin: 0;
-        font-size: 0.88rem;
+    .hero-title {
+        font-size: clamp(2.5rem, 6vw, 4rem);
+        font-weight: 700;
+        color: #ffffff;
+        background: none;
+        -webkit-text-fill-color: initial;
+        margin-bottom: 1.5rem;
+        line-height: 1.2;
+        text-shadow: 0 4px 12px rgba(0,0,0,0.3);
     }
 
-    .landing-topbar .row {
-        gap: 1rem;
+    .hero-subtitle {
+        font-size: 1.25rem;
+        color: rgba(255, 255, 255, 0.85);
+        max-width: 600px;
+        margin: 0 auto 2.5rem;
+        line-height: 1.6;
     }
 
-    .landing-navbar {
-        margin-top: 0;
-        border-radius: 0 0 1rem 1rem;
-        box-shadow: 0 20px 34px -32px rgba(15, 23, 42, 0.28);
+    .hero-section .btn-outline {
+        color: #ffffff;
+        border-color: rgba(255, 255, 255, 0.5);
+        background: rgba(255, 255, 255, 0.05);
     }
 
-    .landing-shell {
+    .hero-section .btn-outline:hover {
+        background: rgba(255, 255, 255, 0.15);
+        color: #ffffff;
+        border-color: #ffffff;
+    }
+
+    .stats-section {
         display: grid;
-        gap: 3.5rem;
-        padding: 0 0 3rem;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 1.5rem;
+        background: #fff;
+        padding: 2.5rem;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border);
+        margin-bottom: 4rem;
+        box-shadow: var(--shadow-sm);
     }
 
-    .hero-banner {
-        position: relative;
-        min-height: 520px;
-        border-radius: 1.25rem;
-        overflow: hidden;
-        background:
-            linear-gradient(90deg, rgba(10, 15, 25, 0.78), rgba(10, 15, 25, 0.35)),
-            url("https://images.pexels.com/photos/10041310/pexels-photo-10041310.jpeg?cs=srgb&dl=pexels-cristian-rojas-10041310.jpg&fm=jpg") center/cover no-repeat,
-            radial-gradient(circle at top left, rgba(249, 115, 22, 0.28), transparent 24%),
-            linear-gradient(130deg, #0f172a 0%, #134e4a 46%, #1e293b 100%);
-        box-shadow: 0 28px 60px -32px rgba(15, 23, 42, 0.4);
-    }
-
-    .hero-banner::before {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background:
-            linear-gradient(to top, rgba(15, 23, 42, 0.78), transparent 44%),
-            repeating-linear-gradient(
-                90deg,
-                rgba(255,255,255,0.08) 0,
-                rgba(255,255,255,0.08) 56px,
-                rgba(255,255,255,0.02) 56px,
-                rgba(255,255,255,0.02) 112px
-            );
-        opacity: 0.28;
-    }
-
-    .hero-banner::after {
-        content: "";
-        position: absolute;
-        inset: 0;
-        background:
-            linear-gradient(to top, rgba(15, 23, 42, 0.58), rgba(15, 23, 42, 0.1)),
-            url("{% static 'accounts/hero-logistics.svg' %}") center/cover no-repeat;
-        opacity: 0.38;
-    }
-
-    .hero-content {
-        position: relative;
-        z-index: 1;
-        min-height: 520px;
-        display: grid;
-        place-items: center;
-        padding: 3rem 2rem 6rem;
+    .stat-item {
         text-align: center;
     }
 
-    .hero-badge-row {
-        display: flex;
-        justify-content: center;
-        gap: 0.75rem;
-        flex-wrap: wrap;
-        margin-bottom: 1.2rem;
-    }
-
-    .hero-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.45rem;
-        padding: 0.45rem 0.8rem;
-        border-radius: 999px;
-        background: rgba(255,255,255,0.12);
-        border: 1px solid rgba(255,255,255,0.18);
-        color: rgba(255,255,255,0.92);
-        font-size: 0.88rem;
-        font-weight: 600;
-    }
-
-    .hero-copy {
-        max-width: 760px;
-    }
-
-    .hero-copy h1 {
-        color: #fff;
-        background: none;
-        -webkit-text-fill-color: initial;
-        font-size: clamp(2.8rem, 5vw, 4.35rem);
-        margin-bottom: 1rem;
-        text-shadow: 0 10px 30px rgba(0, 0, 0, 0.28);
-    }
-
-    .hero-copy p {
-        color: rgba(255, 255, 255, 0.88);
-        max-width: 62ch;
-        margin: 0 auto 1.5rem;
-        font-size: 1.05rem;
-    }
-
-    .hero-actions {
-        display: flex;
-        justify-content: center;
-        gap: 1rem;
-        flex-wrap: wrap;
-    }
-
-    .hero-actions .btn-outline {
-        color: #fff;
-        border-color: rgba(255,255,255,0.55);
-        background: rgba(255,255,255,0.08);
-    }
-
-    .hero-actions .btn-outline:hover {
-        background: rgba(255,255,255,0.16);
-        color: #fff;
-    }
-
-    .hero-stats {
-        position: relative;
-        z-index: 2;
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 1rem;
-        margin: -3.5rem auto 0;
-        width: min(100% - 2rem, 980px);
-    }
-
-    .stat-card {
-        background: #fff;
-        border-radius: 0.85rem;
-        padding: 1.25rem;
-        box-shadow: 0 20px 40px -28px rgba(15, 23, 42, 0.28);
-        border: 1px solid rgba(226, 232, 240, 0.95);
-    }
-
-    .stat-card h3 {
-        margin: 0 0 0.35rem;
-        font-size: 1.55rem;
-        color: #f97316;
-    }
-
-    .stat-card p {
-        margin: 0;
-        font-size: 0.92rem;
-    }
-
-    .section-wrap {
-        display: grid;
-        gap: 1.5rem;
-    }
-
-    .section-intro {
-        max-width: 620px;
-    }
-
-    .section-intro h2 {
-        font-size: clamp(1.9rem, 3vw, 2.5rem);
-        margin-bottom: 0.5rem;
-    }
-
-    .about-grid {
-        display: grid;
-        grid-template-columns: minmax(320px, 1fr) minmax(0, 1.1fr);
-        gap: 2.5rem;
-        align-items: center;
-    }
-
-    .about-visual {
-        position: relative;
-        min-height: 460px;
-    }
-
-    .about-frame-back,
-    .about-frame-front {
-        position: absolute;
-        border-radius: 1rem;
-    }
-
-    .about-frame-back {
-        inset: 2rem 0 0 2rem;
-        background: #5b178f;
-    }
-
-    .about-frame-front {
-        inset: 0 2rem 2rem 0;
-        overflow: hidden;
-        background:
-            linear-gradient(180deg, rgba(15,23,42,0.18), rgba(15,23,42,0.48)),
-            url("https://images.pexels.com/photos/6216299/pexels-photo-6216299.jpeg?cs=srgb&dl=pexels-eva-bronzini-6216299.jpg&fm=jpg") center/cover no-repeat,
-            url("{% static 'accounts/about-route-grid.svg' %}") center/cover no-repeat;
-        box-shadow: 0 22px 48px -30px rgba(15, 23, 42, 0.45);
-    }
-
-    .about-copy .eyebrow-inline {
-        color: #f97316;
-        font-size: 0.88rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-        margin-bottom: 0.75rem;
-        display: inline-block;
-    }
-
-    .about-copy h2 {
-        margin-bottom: 1rem;
-        font-size: clamp(2rem, 3vw, 2.8rem);
-    }
-
-    .service-grid {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 1rem;
-    }
-
-    .service-card {
-        background: rgba(255,255,255,0.82);
-        border: 1px solid rgba(226,232,240,0.95);
-        border-radius: 1rem;
-        padding: 1.35rem;
-        box-shadow: 0 18px 34px -30px rgba(15, 23, 42, 0.24);
-    }
-
-    .service-icon {
-        width: 2.4rem;
-        height: 2.4rem;
-        border-radius: 0.75rem;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(91, 23, 143, 0.08);
-        color: #5b178f;
-        font-weight: 700;
-        margin-bottom: 0.9rem;
-    }
-
-    .trust-strip {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 1rem;
-        align-items: stretch;
-    }
-
-    .trust-item {
-        background: rgba(255,255,255,0.82);
-        border: 1px solid rgba(226,232,240,0.95);
-        border-radius: 1rem;
-        padding: 1.1rem 1.15rem;
-        display: flex;
-        gap: 0.85rem;
-        align-items: flex-start;
-        box-shadow: 0 18px 34px -30px rgba(15, 23, 42, 0.2);
-    }
-
-    .trust-mark {
-        width: 2rem;
-        height: 2rem;
-        border-radius: 999px;
-        background: rgba(249, 115, 22, 0.12);
-        color: #f97316;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-weight: 800;
-        flex: none;
-    }
-
-    .trust-item h3 {
-        margin: 0 0 0.35rem;
-        font-size: 1rem;
-    }
-
-    .trust-item p {
-        margin: 0;
-        font-size: 0.92rem;
-    }
-
-    .service-card h3 {
-        margin-bottom: 0.65rem;
-        font-size: 1.15rem;
-    }
-
-    .steps-row {
-        display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-        gap: 1rem;
-    }
-
-    .step-card {
-        border-top: 4px solid #f97316;
-        background: #fff;
-        padding: 1.4rem;
-        border-radius: 0.85rem;
-        box-shadow: 0 18px 34px -30px rgba(15, 23, 42, 0.24);
-    }
-
-    .step-card strong {
-        display: inline-block;
-        color: #5b178f;
-        margin-bottom: 0.7rem;
-    }
-
-    .cta-band {
-        padding: 2rem;
-        border-radius: 1.1rem;
-        background: linear-gradient(135deg, #fff7ed, #ffffff);
-        border: 1px solid rgba(249, 115, 22, 0.18);
-        display: flex;
-        justify-content: space-between;
-        gap: 1rem;
-        align-items: center;
-        flex-wrap: wrap;
-    }
-
-    .cta-band p {
-        margin: 0.35rem 0 0;
-    }
-
-    .landing-footer {
-        display: grid;
-        grid-template-columns: minmax(0, 1.1fr) repeat(2, minmax(180px, 0.6fr));
-        gap: 1.5rem;
-        padding: 1.5rem 0 0.5rem;
-        border-top: 1px solid rgba(203, 213, 225, 0.8);
-    }
-
-    .footer-block h3 {
-        margin-bottom: 0.6rem;
-        font-size: 1.05rem;
-    }
-
-    .footer-block p,
-    .footer-block a {
-        margin: 0.15rem 0;
-        color: var(--muted);
-        text-decoration: none;
-        font-size: 0.96rem;
-    }
-
-    .footer-block a:hover {
+    .stat-item h4 {
+        font-size: 2.5rem;
         color: var(--accent-dark);
+        margin: 0 0 0.5rem;
+        font-weight: 700;
     }
 
-    @media (max-width: 960px) {
-        .hero-stats,
-        .trust-strip,
-        .service-grid,
-        .steps-row,
-        .about-grid,
-        .landing-footer {
-            grid-template-columns: 1fr;
-        }
-
-        .landing-shell {
-            padding-bottom: 2rem;
-        }
-
-        .hero-content {
-            min-height: 460px;
-            padding-bottom: 5rem;
-        }
-
+    .stat-item p {
+        color: var(--muted);
+        margin: 0;
+        font-size: 0.95rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
     }
 
-    @media (max-width: 680px) {
-        .landing-topbar {
-            width: calc(100% - 1rem);
-            margin-top: 0.5rem;
-            border-radius: 0.75rem;
-            flex-direction: column;
-            align-items: flex-start;
-        }
+    .features-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 2rem;
+        margin-bottom: 4rem;
+    }
 
-        .hero-stats {
-            width: calc(100% - 1rem);
-        }
+    .feature-card {
+        background: #fff;
+        padding: 2.5rem 2rem;
+        border-radius: var(--radius-lg);
+        border: 1px solid var(--border);
+        box-shadow: var(--shadow-sm);
+        text-align: center;
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
 
+    .feature-card:hover {
+        transform: translateY(-5px);
+        box-shadow: var(--shadow);
+    }
+
+    .feature-icon {
+        width: 64px;
+        height: 64px;
+        background: rgba(16, 185, 129, 0.1);
+        color: var(--accent-dark);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 1.5rem;
+    }
+    
+    .feature-icon svg {
+        width: 32px;
+        height: 32px;
+    }
+
+    .feature-card h3 {
+        font-size: 1.25rem;
+        margin-bottom: 1rem;
+    }
+
+    .feature-card p {
+        color: var(--muted);
+        font-size: 1rem;
+        margin: 0;
+    }
+
+    .simple-footer {
+        text-align: center;
+        padding: 2rem;
+        border-top: 1px solid var(--border);
+        color: var(--muted);
+        font-size: 0.95rem;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+
+    .action-buttons .btn-large {
+        padding: 1rem 2rem;
+        font-size: 1.1rem;
+    }
+    
+    @media (max-width: 768px) {
+        .hero-section {
+            padding: 4rem 1.5rem;
+        }
+        .stats-section {
+            grid-template-columns: repeat(2, 1fr);
+        }
     }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="landing-topbar">
-    <div class="row">
-        <p>{{ site_support_email }}</p>
-        <p>{{ site_support_phone }}</p>
-    </div>
-    <div class="row">
-        <p>{{ site_tagline }}</p>
-    </div>
-</div>
-
 <div class="landing-shell">
-    <section class="hero-banner">
-        <div class="hero-content">
-            <div class="hero-copy">
-                <div class="hero-badge-row">
-                    <span class="hero-badge">Map Booking</span>
-                    <span class="hero-badge">M-Pesa Payment</span>
-                    <span class="hero-badge">Delivery Tracking</span>
-                </div>
-                <h1>Safe and reliable produce transport from farm pickup to delivery.</h1>
-                <p>
-                    {{ site_name }} helps farmers book transport, pay through M-Pesa, and follow delivery progress.
-                    Transporters can view jobs, accept bookings, and complete trips with less back and forth.
-                </p>
-                <div class="hero-actions">
-                    <a href="{% url 'signup' %}" class="btn">Get Started</a>
-                    <a href="#about" class="btn btn-outline">Learn More</a>
-                </div>
+    <section class="hero-section">
+        <h1 class="hero-title">Farm Produce Transport Made Simple</h1>
+        <p class="hero-subtitle">
+            Connect directly with reliable transporters. Book your trip, pay securely via M-Pesa, and track your delivery on the map.
+        </p>
+        <div class="action-buttons">
+            <a href="{% url 'signup' %}" class="btn btn-large">Get Started Now</a>
+            <a href="{% url 'login' %}" class="btn btn-outline btn-large">Sign In</a>
+        </div>
+    </section>
+
+    <section class="features-grid">
+        <div class="feature-card">
+            <div class="feature-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.243-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
             </div>
+            <h3>1. Book on the Map</h3>
+            <p>Select your exact pickup and drop-off locations directly on our interactive map.</p>
         </div>
-    </section>
-
-    <section class="hero-stats">
-        <article class="stat-card">
-            <h3>{{ landing_metrics.vehicle_classes }}</h3>
-            <p>Vehicle options available for booking.</p>
-        </article>
-        <article class="stat-card">
-            <h3>{{ landing_metrics.registered_transporters }}</h3>
-            <p>Transporters registered in the platform.</p>
-        </article>
-        <article class="stat-card">
-            <h3>{{ landing_metrics.active_routes }}</h3>
-            <p>Deliveries currently in progress.</p>
-        </article>
-        <article class="stat-card">
-            <h3>{{ landing_metrics.delivered_bookings }}</h3>
-            <p>Completed deliveries recorded so far.</p>
-        </article>
-    </section>
-
-    <section class="trust-strip">
-        <article class="trust-item">
-            <span class="trust-mark">M</span>
-            <div>
-                <h3>M-Pesa Payment</h3>
-                <p>Farmers pay during booking, without waiting for later follow-up.</p>
+        <div class="feature-card">
+            <div class="feature-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
             </div>
-        </article>
-        <article class="trust-item">
-            <span class="trust-mark">R</span>
-            <div>
-                <h3>Route-Based Booking</h3>
-                <p>Pickup and delivery points are chosen directly from the map.</p>
+            <h3>2. Secure M-Pesa Payment</h3>
+            <p>See clear pricing upfront and pay effortlessly using M-Pesa before the trip begins.</p>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
             </div>
-        </article>
-        <article class="trust-item">
-            <span class="trust-mark">T</span>
-            <div>
-                <h3>Trip Progress</h3>
-                <p>Farmers can follow delivery progress as the transporter moves the goods.</p>
-            </div>
-        </article>
-        <article class="trust-item">
-            <span class="trust-mark">V</span>
-            <div>
-                <h3>Vehicle Matching</h3>
-                <p>Bookings are matched to available transporters based on vehicle setup.</p>
-            </div>
-        </article>
-    </section>
-
-    <section id="about" class="about-grid">
-        <div class="about-visual">
-            <div class="about-frame-back"></div>
-            <div class="about-frame-front"></div>
-        </div>
-        <div class="about-copy">
-            <span class="eyebrow-inline">About Us</span>
-            <h2>We make produce transport easier for both farmers and transporters.</h2>
-            <p>
-                Farmers can choose pickup and dropoff locations on the map, see the transport price before paying,
-                and follow the trip until the goods are delivered.
-            </p>
-            <p>
-                Transporters can keep their vehicle details up to date, view available jobs that match their vehicle,
-                and manage the journey from pickup to delivery in one place.
-            </p>
-            <div class="hero-actions" style="justify-content: flex-start;">
-                <a href="{% url 'signup' %}" class="btn">Create Account</a>
-                <a href="{% url 'login' %}" class="btn btn-outline">Sign In</a>
-            </div>
+            <h3>3. Live Tracking</h3>
+            <p>Follow your goods in real-time as the transporter completes the journey.</p>
         </div>
     </section>
 
-    <section id="services" class="section-wrap">
-        <div class="section-intro">
-            <h2>Services</h2>
-            <p>The platform supports the main steps users expect when arranging produce delivery.</p>
-        </div>
-        <div class="service-grid">
-            <article class="service-card">
-                <span class="service-icon">1</span>
-                <h3>Booking From The Map</h3>
-                <p>Farmers select where goods are collected and where they should be delivered.</p>
-            </article>
-            <article class="service-card">
-                <span class="service-icon">2</span>
-                <h3>Clear Pricing</h3>
-                <p>Transport charges are shown during booking so users know the expected cost before payment.</p>
-            </article>
-            <article class="service-card">
-                <span class="service-icon">3</span>
-                <h3>Delivery Progress</h3>
-                <p>Users can follow the delivery journey and see when goods have reached the destination.</p>
-            </article>
-        </div>
-    </section>
-
-    <section id="how-it-works" class="section-wrap">
-        <div class="section-intro">
-            <h2>How It Works</h2>
-            <p>The process is simple for both the farmer booking the trip and the transporter handling it.</p>
-        </div>
-        <div class="steps-row">
-            <article class="step-card">
-                <strong>Step 1</strong>
-                <h3>Book and pay</h3>
-                <p>The farmer creates the booking, sees the transport amount, and pays with M-Pesa.</p>
-            </article>
-            <article class="step-card">
-                <strong>Step 2</strong>
-                <h3>Transporter accepts</h3>
-                <p>The transporter sees the request, accepts the booking, and heads to pickup.</p>
-            </article>
-            <article class="step-card">
-                <strong>Step 3</strong>
-                <h3>Deliver and confirm</h3>
-                <p>The goods are delivered and the farmer can see the delivery progress along the way.</p>
-            </article>
-        </div>
-    </section>
-
-    <section class="cta-band">
-        <div>
-            <h2 style="margin: 0;">Ready to use {{ site_name }}?</h2>
-            <p>Create an account as a farmer or transporter and start using the platform.</p>
-        </div>
-        <div class="hero-actions" style="margin-top: 0; justify-content: flex-start;">
-            <a href="{% url 'signup' %}" class="btn">Create Account</a>
-            <a href="{% url 'login' %}" class="btn btn-outline">Sign In</a>
-        </div>
-    </section>
-
-    <footer class="landing-footer">
-        <div class="footer-block">
-            <h3>{{ site_name }}</h3>
-            <p>Produce transport support for farmers and transporters, from pickup booking to delivery follow-up.</p>
-        </div>
-        <div class="footer-block">
-            <h3>Quick Links</h3>
-            <p><a href="#about">About</a></p>
-            <p><a href="#services">Services</a></p>
-            <p><a href="#how-it-works">How It Works</a></p>
-        </div>
-        <div class="footer-block">
-            <h3>Contact</h3>
-            <p>{{ site_support_email }}</p>
-            <p>{{ site_support_phone }}</p>
-        </div>
+    <footer class="simple-footer">
+        <p>&copy; {% now "Y" %} {{ site_name|default:"FreshHaul" }}. All rights reserved.</p>
+        <p style="margin-top: 0.5rem;">Support: apundawyclife333@10993957.brevosend.com | +254 793998900</p>
     </footer>
 </div>
 {% endblock %}

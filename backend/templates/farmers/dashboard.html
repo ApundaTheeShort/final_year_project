@@ -1,7 +1,74 @@
 {% extends "base.html" %}
 
 {% block title %}Farmer Dashboard | FreshHaul{% endblock %}
-{% block page_class %}wide{% endblock %}
+{% block body_class %}has-sidebar{% endblock %}
+
+{% block topbar %}
+<div class="sidebar-topbar">
+    <button class="hamburger" onclick="toggleSidebar()" aria-label="Open navigation">
+        <span></span><span></span><span></span>
+    </button>
+    <span class="topbar-brand">FreshHaul</span>
+</div>
+{% endblock %}
+
+{% block sidebar %}
+<aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+        <div class="sidebar-logo-icon">
+            <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        </div>
+        <a href="{% url 'home' %}" class="sidebar-logo-text">FreshHaul</a>
+    </div>
+
+    <nav class="sidebar-nav" role="navigation" aria-label="Dashboard navigation">
+        <span class="sidebar-nav-label">Dispatch</span>
+        <button id="nav-create" class="sidebar-link active" onclick="switchTab('create')">
+            <span class="nav-icon">📦</span> Create Booking
+        </button>
+        <button id="nav-list" class="sidebar-link" onclick="switchTab('list')">
+            <span class="nav-icon">📋</span> My Bookings
+        </button>
+        <button id="nav-track" class="sidebar-link" onclick="switchTab('track')">
+            <span class="nav-icon">📍</span> Live Tracking
+        </button>
+
+        <span class="sidebar-nav-label">Insights</span>
+        <button id="nav-reports" class="sidebar-link" onclick="switchTab('reports')">
+            <span class="nav-icon">📊</span> Reports
+        </button>
+
+        <span class="sidebar-nav-label">Account</span>
+        <button id="nav-account" class="sidebar-link" onclick="switchTab('account')">
+            <span class="nav-icon">👤</span> Account Profile
+        </button>
+    </nav>
+
+    <div class="sidebar-footer">
+        <div class="sidebar-user">
+            <div class="sidebar-avatar">{{ user.first_name|make_list|first|upper|default:"F" }}</div>
+            <div class="sidebar-user-info">
+                <div class="sidebar-user-name">{{ user.first_name }} {{ user.last_name }}</div>
+                <div class="sidebar-user-role">Farmer</div>
+            </div>
+        </div>
+        <form method="post" action="{% url 'logout' %}" style="margin:0;">
+            {% csrf_token %}
+            <button type="submit" class="sidebar-logout-btn">
+                <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+                Sign Out
+            </button>
+        </form>
+    </div>
+</aside>
+{% endblock %}
+
+{% block main_wrapper_open %}
+<div class="app-content">
+{% endblock %}
+{% block main_wrapper_close %}
+</div>
+{% endblock %}
 
 {% block extra_head %}
 <style>
@@ -263,25 +330,11 @@
 {% endblock %}
 
 {% block content %}
-<div class="panel" style="background: linear-gradient(135deg, rgba(16,185,129,0.1), transparent); border-color: rgba(16,185,129,0.2); margin-bottom: 2rem;">
-    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
-        <div>
-            <h1>Dispatch Dashboard</h1>
-            <p style="margin: 0;">Map-driven routing, instant transporter matching, and live delivery tracking.</p>
-        </div>
-        <div style="text-align: right;">
-            <p style="margin: 0; font-weight: 600;">{{ user.first_name }} {{ user.last_name }}</p>
-            <span class="status-badge" style="background: var(--text); color: white;">Farmer</span>
-        </div>
+<div class="dash-header">
+    <div>
+        <h1>Dispatch Dashboard</h1>
+        <p class="dash-subtitle">Map-driven routing, transporter matching, and live delivery tracking.</p>
     </div>
-</div>
-
-<div class="tabs" style="display: flex; gap: 1rem; margin-bottom: 1.5rem; border-bottom: 1px solid var(--border);">
-    <button type="button" class="tab-btn active" onclick="switchTab('create')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--accent); border-bottom: 2px solid var(--accent); cursor: pointer; border-radius: 0;">Create Booking</button>
-    <button type="button" class="tab-btn" onclick="switchTab('list')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">My Bookings</button>
-    <button type="button" class="tab-btn" onclick="switchTab('track')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Live Tracking</button>
-    <button type="button" class="tab-btn" onclick="switchTab('reports')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Reports</button>
-    <button type="button" class="tab-btn" onclick="switchTab('account')" style="background: none; border: none; font-weight: 600; padding: 0.5rem 1rem; color: var(--muted); cursor: pointer; border-radius: 0;">Account Profile</button>
 </div>
 <div id="tab-create" class="tab-content" style="display: block;">
     <div class="stack" style="max-width: 960px; margin: 0 auto; gap: 2rem;">
@@ -1769,17 +1822,13 @@
 
     window.switchTab = function(tabId) {
         document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.style.color = 'var(--muted)';
-            btn.style.borderBottom = 'none';
-        });
-        
         document.getElementById(`tab-${tabId}`).style.display = 'block';
-        const activeBtn = document.querySelector(`.tab-btn[onclick="switchTab('${tabId}')"]`);
-        if(activeBtn) {
-            activeBtn.style.color = 'var(--accent)';
-            activeBtn.style.borderBottom = '2px solid var(--accent)';
-        }
+        // Update sidebar active state
+        document.querySelectorAll('.sidebar-link').forEach(btn => btn.classList.remove('active'));
+        const sidebarBtn = document.getElementById(`nav-${tabId}`);
+        if (sidebarBtn) sidebarBtn.classList.add('active');
+        // Close sidebar on mobile after nav
+        if (window.innerWidth <= 768) closeSidebar();
 
         if (tabId === 'create') {
             setTimeout(() => {

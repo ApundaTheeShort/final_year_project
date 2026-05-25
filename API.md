@@ -1,64 +1,69 @@
 # API Reference
 
-Backend API reference for the produce transport platform.
+This document describes the backend API exposed by FreshHaul.
 
-Base URL examples assume local development:
+Base local URL:
 
 `http://127.0.0.1:8000`
 
-Most API routes are under:
+API namespaces:
 
-`/api/`
+- `/api/bookings/`
+- `/api/maps/`
+- `/api/payments/`
+- `/api/transporters/`
 
 ## Authentication
 
-The project uses Django session authentication.
+The API uses Django session authentication.
 
-- Web login: `/accounts/login/`
-- API auth: session-based after login
-- Public signup: `/accounts/signup/`
-- Email verification notice: `/accounts/verification-sent/`
-- Email verification confirm: `/accounts/verify-email/<uidb64>/<token>/`
-- Resend verification: `/accounts/resend-verification/`
+- Login page: `/accounts/login/`
+- Signup page: `/accounts/signup/`
+- Authenticated API requests use the browser session cookie.
+- CSRF protection applies to session-authenticated write requests.
 
-Notes:
+Important auth rules:
 
-- Non-staff users must verify their email before they can sign in.
-- Changing the account email triggers a new verification email.
-- `BasicAuthentication` and token auth are not used by default.
-- Most API endpoints require an authenticated user and are throttled by DRF.
-- Payment is initiated separately through the M-Pesa STK push endpoint after booking creation.
+- Non-staff users must verify email before login.
+- Public signup only supports `farmer` and `driver`.
+- Most API endpoints require authentication.
+- DRF throttling is enabled for both anonymous and authenticated traffic.
 
 ## Roles
 
 - `farmer`
-  Can create, list, view, track, and delete pending bookings.
+  Booking creation, booking listing, booking deletion while unpaid, payment initiation, booking tracking.
 - `driver`
-  Can configure vehicle details, update live location, accept bookings, mark pickup/delivery, and send tracking updates.
+  Vehicle/profile setup, live location updates, open jobs, assigned jobs, accept/decline decisions, pickup/delivery updates.
 - `admin`
-  Uses app dashboards and Django admin, not special API-only endpoints.
+  Accesses dashboards and Django admin. No admin-only REST namespace is currently exposed.
 
-## Common Response Notes
+## Common Error Behavior
 
-- Validation errors usually return `400 Bad Request`
-- Unauthorized access returns `401` or `403`
-- Missing resources return `404`
-- Successful delete returns `204 No Content`
+- `400 Bad Request`
+  Validation or business-rule failure.
+- `401 Unauthorized`
+  Not logged in.
+- `403 Forbidden`
+  Logged in without required role.
+- `404 Not Found`
+  Resource not visible to the current user.
+- `204 No Content`
+  Successful delete.
 
-## Booking Rules Enforced by API
+## Core Domain Rules
 
-- Farmers do not provide a search radius.
-- The system automatically searches outward for matching drivers.
-- Farmers can delete only `pending` bookings.
-- Farmers can delete only `pending_payment` bookings.
-- Farmers must pay the quoted amount before a booking becomes driver-visible.
-- Drivers can accept only matching bookings for their available vehicle.
-- Drivers can mark `picked_up` only after arriving at pickup.
-- Drivers can mark `delivered` only after arriving at dropoff.
-- `in_transit` is set automatically after the driver leaves pickup with the goods.
-- Farmers and drivers see technical tracking data hidden in the UI even though tracking endpoints still return operational data.
+- Only farmers can create bookings.
+- Bookings start in `pending_payment`.
+- Drivers only see open jobs in `confirmed`.
+- Drivers can only accept jobs that are already paid and that match their dispatch profile.
+- Farmers can only delete bookings in `pending_payment`.
+- Pickup and delivery actions are location-gated against the driver profile coordinates.
+- Vehicle type is derived from booking weight, not chosen manually by the farmer.
 
-## Booking Status Values
+## Status Reference
+
+### Booking Status
 
 - `pending_payment`
 - `confirmed`
@@ -70,7 +75,41 @@ Notes:
 - `completed`
 - `cancelled`
 
-## Bookings
+### Booking Payment Status
+
+- `unpaid`
+- `pending`
+- `paid`
+
+### Payment Status
+
+- `pending`
+- `stk_push_sent`
+- `paid_held`
+- `failed`
+- `cancelled`
+- `released`
+
+### Payout Status
+
+- `pending_release`
+- `released`
+- `failed`
+
+## Accounts Web Endpoints
+
+These are not under `/api/`, but they are part of the authentication and account flow:
+
+- `GET /`
+- `GET|POST /accounts/signup/`
+- `GET|POST /accounts/login/`
+- `GET|POST /accounts/profile/`
+- `GET /accounts/verification-sent/`
+- `GET|POST /accounts/verify-email/`
+- `GET /accounts/verify-email/<uidb64>/<token>/`
+- `GET|POST /accounts/resend-verification/`
+
+## Booking Endpoints
 
 ### List Farmer Bookings
 
@@ -120,65 +159,22 @@ Request body:
 }
 ```
 
-Response includes:
+Response includes derived booking fields such as:
 
-- generated booking id
-- resolved pickup/dropoff fields
-- route distance and duration
-- route geometry
-- vehicle type required
-- quoted price
-- booking `payment_status`
-- system-selected search radius
-- matched transporters
+- `search_radius_km`
+- `estimated_distance_km`
+- `estimated_duration_minutes`
+- `route_geometry`
+- `vehicle_type_required`
+- `quoted_price`
+- `status`
+- `payment_status`
+- `matched_transporters`
 
-Example response:
+Typical created status values:
 
-```json
-{
-  "id": 12,
-  "produce_name": "Tomatoes",
-  "produce_description": "Fresh tomatoes for market",
-  "weight_kg": "800.00",
-  "pickup_place_id": "11",
-  "pickup_place_source": "nominatim",
-  "pickup_address": "Farm Gate, Kiambu",
-  "pickup_latitude": "-1.292100",
-  "pickup_longitude": "36.821900",
-  "dropoff_place_id": "22",
-  "dropoff_place_source": "nominatim",
-  "dropoff_address": "City Market, Nairobi",
-  "dropoff_latitude": "-1.300000",
-  "dropoff_longitude": "36.800000",
-  "search_radius_km": "50.00",
-  "estimated_distance_km": "12.40",
-  "estimated_duration_minutes": "21.00",
-  "route_geometry": {
-    "type": "LineString",
-    "coordinates": [[36.8219, -1.2921], [36.8, -1.3]]
-  },
-  "vehicle_type_required": "pickup",
-  "quoted_price": "2480.00",
-  "status": "pending_payment",
-  "payment_status": "unpaid",
-  "matched_transporters": [
-    {
-      "transporter_id": 7,
-      "transporter_name": "Driver Two",
-      "company_name": "Village Hauliers",
-      "distance_km": "0.00",
-      "estimated_price": "2480.00",
-      "vehicle": {
-        "id": 4,
-        "registration_number": "KDB321B",
-        "vehicle_type": "pickup",
-        "capacity_kg": "2000.00",
-        "is_available": true
-      }
-    }
-  ]
-}
-```
+- `status = "pending_payment"`
+- `payment_status = "unpaid"`
 
 ### Get Booking Detail
 
@@ -189,56 +185,17 @@ Roles:
 - `farmer` for own booking
 - `driver` for assigned booking
 
-Example response:
+Returns:
 
-```json
-{
-  "id": 12,
-  "produce_name": "Tomatoes",
-  "produce_description": "Fresh tomatoes for market",
-  "weight_kg": "800.00",
-  "pickup_place": {
-    "place_id": "11",
-    "source": "nominatim",
-    "address": "Farm Gate, Kiambu",
-    "latitude": "-1.292100",
-    "longitude": "36.821900"
-  },
-  "dropoff_place": {
-    "place_id": "22",
-    "source": "nominatim",
-    "address": "City Market, Nairobi",
-    "latitude": "-1.300000",
-    "longitude": "36.800000"
-  },
-  "search_radius_km": "50.00",
-  "estimated_distance_km": "12.40",
-  "estimated_duration_minutes": "21.00",
-  "vehicle_type_required": "pickup",
-  "quoted_price": "2480.00",
-  "status": "accepted",
-  "accepted_at": "2026-03-22T08:14:00Z",
-  "delivered_at": null,
-  "created_at": "2026-03-22T08:00:00Z",
-  "updated_at": "2026-03-22T08:14:00Z",
-  "vehicle": {
-    "id": 4,
-    "registration_number": "KDB321B",
-    "vehicle_type": "pickup",
-    "capacity_kg": "2000.00",
-    "is_available": false
-  },
-  "transporter_profile": {
-    "id": 3,
-    "company_name": "Village Hauliers",
-    "current_latitude": "-1.292100",
-    "current_longitude": "36.821900",
-    "last_location_update": "2026-03-22T08:14:00Z"
-  }
-}
-```
+- booking core fields
+- pickup and dropoff place objects
+- route data
+- assigned vehicle
+- transporter profile when assigned
+- status history
+- tracking updates
 
-### Delete Pending Booking
+### Delete Booking
 
 `DELETE /api/bookings/<id>/`
 
@@ -246,11 +203,23 @@ Role:
 
 - `farmer`
 
-Allowed only when booking status is `pending_payment`.
+Rule:
 
-Successful response:
+- Only allowed when the booking status is `pending_payment`.
+
+Success:
 
 - `204 No Content`
+
+### Get Nearby Transporter Matches
+
+`GET /api/bookings/<booking_id>/nearby-transporters/`
+
+Role:
+
+- `farmer`
+
+Returns the progressive matching result used to identify compatible transporters for the booking.
 
 ### Get Booking Tracking Detail
 
@@ -261,14 +230,24 @@ Roles:
 - `farmer` for own booking
 - assigned `driver`
 
-Returns booking detail plus route and tracking data used by the dashboards.
+Returns booking detail with status history and tracking updates.
 
-Notes:
+### Get Booking Payment Snapshot
 
-- Farmers use this for live tracking after booking acceptance.
-- Drivers use this for assigned-trip route and progress display.
-- The planned route can be shown before pickup starts.
-- Live driver position is intended to become meaningful after pickup has started.
+`GET /api/bookings/<booking_id>/payment-status/`
+
+Roles:
+
+- `farmer`
+- assigned `driver`
+- `admin`
+
+Returns:
+
+- booking `status`
+- booking `payment_status`
+- `quoted_price`
+- nested payment detail if present
 
 ### Update Booking Status
 
@@ -278,7 +257,7 @@ Role:
 
 - assigned `driver`
 
-Request body for pickup:
+Allowed request bodies:
 
 ```json
 {
@@ -286,30 +265,37 @@ Request body for pickup:
 }
 ```
 
-Request body for delivery:
-
 ```json
 {
   "status": "delivered"
 }
 ```
 
-Notes:
-
-- `in_transit` is not manually posted by the driver.
-- Pickup and delivery are location-gated by backend validation.
-- Delivery triggers automatic release of held payment when eligible.
-
-Successful response example:
+Optional field:
 
 ```json
 {
-  "id": 12,
   "status": "picked_up",
-  "accepted_at": "2026-03-22T08:14:00Z",
-  "delivered_at": null
+  "notes": "Loaded and leaving the farm."
 }
 ```
+
+Rules:
+
+- `picked_up` is only valid from `accepted`
+- `delivered` is only valid from `in_transit`
+- driver location must be available
+- driver must be near the required endpoint
+
+### Mark Delivered Shortcut
+
+`POST /api/bookings/<booking_id>/mark-delivered/`
+
+Role:
+
+- assigned `driver`
+
+This endpoint internally submits the same delivery transition as `/status/` with `status = delivered`.
 
 ### Create Tracking Update
 
@@ -326,23 +312,159 @@ Request body:
   "latitude": "-1.295500",
   "longitude": "36.815000",
   "speed_kph": "45.00",
-  "notes": "Automatic live location update"
+  "notes": "Heading to city market"
 }
 ```
 
-### Get Booking Payment Snapshot
+Success:
 
-`GET /api/bookings/<booking_id>/payment-status/`
+- `201 Created`
 
-Roles:
+### List Open Driver Bookings
 
-- `farmer` for own booking
-- assigned `driver`
-- `admin`
+`GET /api/bookings/driver/open/`
 
-Returns booking status, payment status, and nested payment details where available.
+Role:
 
-### Start STK Push
+- `driver`
+
+Returns paid and confirmed bookings whose required vehicle class matches one of the driver's available vehicles. If the driver profile has location coordinates, progressive geographic matching is also applied.
+
+### List Assigned Driver Bookings
+
+`GET /api/bookings/driver/assigned/`
+
+Role:
+
+- `driver`
+
+Returns bookings assigned to the authenticated driver.
+
+### Driver Accept Or Decline Decision
+
+`POST /api/bookings/driver/decision/`
+
+Role:
+
+- `driver`
+
+Request body to accept:
+
+```json
+{
+  "booking_id": 12,
+  "vehicle_id": 4,
+  "action": "accept"
+}
+```
+
+Request body to decline:
+
+```json
+{
+  "booking_id": 12,
+  "action": "decline"
+}
+```
+
+Acceptance rules:
+
+- booking must be `confirmed`
+- booking payment must already be `paid`
+- chosen vehicle must belong to the current driver
+- vehicle must be available
+- vehicle type must match the booking requirement
+- vehicle capacity must be sufficient
+
+## Map Endpoints
+
+### Search Places
+
+`GET /api/maps/places/search/`
+
+Used for forward search against the configured search provider.
+
+### Lookup Places
+
+`GET /api/maps/places/lookup/`
+
+Used to resolve place details from a known place reference.
+
+### Reverse Geocode
+
+`GET /api/maps/places/reverse/`
+
+Used to resolve a human-readable location from coordinates.
+
+### Preview Route
+
+`POST /api/maps/routes/preview/`
+
+Used to get route distance, duration, and geometry between two coordinates.
+
+## Transporter Endpoints
+
+### Get Driver Profile And Vehicles
+
+`GET /api/transporters/me/`
+
+Role:
+
+- `driver`
+
+Returns:
+
+- transporter profile
+- current vehicles list
+
+### Create Or Update Driver Profile And Vehicles
+
+`POST /api/transporters/me/`
+
+Role:
+
+- `driver`
+
+Request body shape:
+
+```json
+{
+  "profile": {
+    "company_name": "Village Hauliers",
+    "current_latitude": "-1.292100",
+    "current_longitude": "36.821900"
+  },
+  "vehicles": [
+    {
+      "registration_number": "KDB321B",
+      "vehicle_type": "pickup",
+      "capacity_kg": "2000.00",
+      "is_available": true
+    }
+  ]
+}
+```
+
+Notes:
+
+- existing vehicle records can be updated by including `id`
+- omitted existing vehicles are deleted during sync
+- registration numbers must be unique
+- vehicle type must exist in configured transport pricing
+
+### Update Driver Live Location
+
+`PATCH /api/transporters/me/location/`
+
+Role:
+
+- `driver`
+
+Used by the dashboard to keep the driver's current coordinates fresh for matching and location-gated delivery actions.
+
+## Payment Endpoints
+
+### Initiate STK Push
 
 `POST /api/payments/stk-push/`
 
@@ -362,345 +484,38 @@ Request body:
 Rules:
 
 - booking must belong to the authenticated farmer
-- amount comes from `quoted_price`, not the request body
-- duplicate successful payment is blocked
 - cancelled bookings cannot be paid
+- already paid bookings cannot be paid again
+- phone number is normalized to Kenyan format
 
-Success response includes a message telling the frontend to prompt the user to complete payment on their phone.
+Success response includes:
+
+- nested payment detail
+- raw Daraja initiation response
+- `callback_url_hint`
 
 ### M-Pesa Callback
 
 `POST /api/payments/mpesa/callback/`
 
-Role:
+Auth:
 
-- public callback endpoint used by Daraja
-
-Notes:
-
-- callback matching is done by `CheckoutRequestID` and `MerchantRequestID`
-- callback handling is idempotent
-- successful callback moves payment to `paid_held` and booking to `confirmed`
-- failed callback leaves booking unpaid
+- public
 
 Notes:
 
-- Also updates the driver's current location.
-- Can automatically switch `picked_up` to `in_transit` once the driver leaves pickup.
+- CSRF exempt
+- used by Daraja to update payment state
 
-Successful response example:
-
-```json
-{
-  "id": 55,
-  "latitude": "-1.295500",
-  "longitude": "36.815000",
-  "speed_kph": "45.00",
-  "notes": "Automatic live location update",
-  "created_at": "2026-03-22T08:20:00Z"
-}
-```
-
-## Driver Booking Queue
-
-### List Open Bookings For Driver
-
-`GET /api/bookings/driver/open/`
-
-Role:
-
-- `driver`
-
-Returns pending bookings that match:
-
-- vehicle type
-- vehicle capacity
-- available vehicle
-- location-based discovery
-
-If the driver has not granted location yet, matching may be limited until live location is available.
-
-### List Assigned Bookings For Driver
-
-`GET /api/bookings/driver/assigned/`
-
-Role:
-
-- `driver`
-
-Returns bookings currently assigned to the authenticated driver.
-
-### Accept Booking
-
-`POST /api/bookings/driver/decision/`
-
-Role:
-
-- `driver`
-
-Request body:
+Success response:
 
 ```json
 {
-  "booking_id": 12,
-  "vehicle_id": 4,
-  "action": "accept"
+  "ResultCode": 0,
+  "ResultDesc": "Accepted",
+  "payment_id": 15
 }
 ```
-
-Notes:
-
-- The booking must already be paid and `confirmed`.
-- The selected vehicle must belong to the driver.
-- The selected vehicle must be available.
-- The selected vehicle must match required type and capacity.
-
-Successful response example:
-
-```json
-{
-  "id": 12,
-  "status": "accepted",
-  "quoted_price": "2480.00",
-  "accepted_at": "2026-03-22T08:14:00Z"
-}
-```
-
-## Maps
-
-### Search Places
-
-`GET /api/maps/places/search/?q=<query>`
-
-Authenticated endpoint.
-
-Example:
-
-`GET /api/maps/places/search/?q=City%20Market`
-
-Successful response example:
-
-```json
-{
-  "results": [
-    {
-      "place_id": "123",
-      "source": "nominatim",
-      "osm_type": "W",
-      "osm_id": "456",
-      "name": "City Market",
-      "address": "City Market, Nairobi",
-      "latitude": "-1.286389",
-      "longitude": "36.817223"
-    }
-  ]
-}
-```
-
-### Lookup Place
-
-`GET /api/maps/places/lookup/?osm_type=<type>&osm_id=<id>`
-
-Authenticated endpoint.
-
-### Reverse Geocode
-
-`GET /api/maps/places/reverse/?latitude=<lat>&longitude=<lng>`
-
-Authenticated endpoint.
-
-### Preview Route
-
-`POST /api/maps/routes/preview/`
-
-Authenticated endpoint.
-
-Request body:
-
-```json
-{
-  "pickup_place": {
-    "address": "Farm Gate, Kiambu",
-    "name": "Farm Gate",
-    "latitude": "-1.292100",
-    "longitude": "36.821900",
-    "place_id": "11",
-    "source": "nominatim",
-    "osm_type": "W",
-    "osm_id": "11"
-  },
-  "dropoff_place": {
-    "address": "City Market, Nairobi",
-    "name": "City Market",
-    "latitude": "-1.300000",
-    "longitude": "36.800000",
-    "place_id": "22",
-    "source": "nominatim",
-    "osm_type": "W",
-    "osm_id": "22"
-  }
-}
-```
-
-Response includes:
-
-- pickup and dropoff payloads
-- `distance_km`
-- `duration_minutes`
-- route `geometry`
-
-## Transporters
-
-### Get Driver Profile And Vehicles
-
-`GET /api/transporters/me/`
-
-Role:
-
-- `driver`
-
-Returns:
-
-- transporter profile
-- driver vehicles
-
-Example response:
-
-```json
-{
-  "profile": {
-    "id": 3,
-    "company_name": "Village Hauliers",
-    "current_latitude": "-1.292100",
-    "current_longitude": "36.821900",
-    "last_location_update": "2026-03-22T08:14:00Z"
-  },
-  "vehicles": [
-    {
-      "id": 4,
-      "registration_number": "KDB321B",
-      "vehicle_type": "pickup",
-      "capacity_kg": "2000.00",
-      "is_available": true
-    }
-  ]
-}
-```
-
-### Create Or Update Driver Profile And Vehicles
-
-`POST /api/transporters/me/`
-
-Role:
-
-- `driver`
-
-Request body:
-
-```json
-{
-  "profile": {
-    "company_name": "Fast Wheels",
-    "current_latitude": "-1.292100",
-    "current_longitude": "36.821900"
-  },
-  "vehicles": [
-    {
-      "registration_number": "KDA123A",
-      "vehicle_type": "pickup",
-      "capacity_kg": "1500.00",
-      "is_available": true
-    }
-  ]
-}
-```
-
-Notes:
-
-- Transport pricing is not driver-controlled.
-- Pricing is set by admin by vehicle type.
-- The dashboard uses this endpoint for the vehicle profile modal.
-
-### Update Driver Live Location
-
-`PATCH /api/transporters/me/location/`
-
-Role:
-
-- `driver`
-
-Request body:
-
-```json
-{
-  "current_latitude": "-1.292100",
-  "current_longitude": "36.821900"
-}
-```
-
-## Payments
-
-### Initiate STK Push
-
-`POST /api/payments/stk-push/`
-
-Role:
-
-- `farmer`
-
-Request body:
-
-```json
-{
-  "booking_id": 12,
-  "phone_number": "0712345678"
-}
-```
-
-Notes:
-
-- The amount is taken from `booking.quoted_price`, not user input.
-- Duplicate successful payment attempts are blocked.
-- Cancelled bookings cannot be paid.
-
-Example response:
-
-```json
-{
-  "payment": {
-    "id": 5,
-    "booking": 12,
-    "amount_kes": "2480.00",
-    "phone_number": "254712345678",
-    "status": "stk_push_sent"
-  },
-  "daraja": {
-    "MerchantRequestID": "29115-34620561-1",
-    "CheckoutRequestID": "ws_CO_191220191020363925",
-    "ResponseDescription": "Success. Request accepted for processing"
-  },
-  "message": "STK push sent. Complete payment on your phone."
-}
-```
-
-### Daraja Callback
-
-`POST /api/payments/mpesa/callback/`
-
-Role:
-
-- callback endpoint for Safaricom Daraja
-
-On success:
-
-- payment becomes `paid_held`
-- booking becomes `confirmed`
-- payout becomes `pending_release`
-
-On delivery release:
-
-- payment becomes `released`
-- payout becomes `released`
 
 ### Get Payment Detail
 
@@ -712,9 +527,18 @@ Roles:
 - related `driver`
 - `admin`
 
-### Get Booking Payment Status
+Returns:
 
-`GET /api/bookings/<booking_id>/payment-status/`
+- payment identifiers
+- amount
+- phone number
+- receipt and callback metadata
+- payment status history
+- payout record when available
+
+### Get Payment Status By Booking
+
+`GET /api/payments/bookings/<booking_id>/status/`
 
 Roles:
 
@@ -722,355 +546,33 @@ Roles:
 - related `driver`
 - `admin`
 
-Example response:
-
-```json
-{
-  "id": 12,
-  "status": "confirmed",
-  "payment_status": "paid",
-  "quoted_price": "2480.00",
-  "payment": {
-    "id": 5,
-    "amount_kes": "2480.00",
-    "status": "paid_held",
-    "mpesa_receipt_number": "R123XYZ"
-  }
-}
-```
-
-## Admin Functions
-
-The admin dashboard is page-based, not API-based.
-
-- App dashboard: `/accounts/admin-dashboard/`
-- Django admin: `/admin/`
-
-Pricing is managed through:
-
-- in-app admin dashboard
-- Django admin `TransportPricing`
-
-## Email Verification And Password Reset
-
-### Signup
-
-`POST /accounts/signup/`
-
-Creates a `farmer` or `driver` account and sends an email verification link.
-
-### Verify Email
-
-`GET /accounts/verify-email/<uidb64>/<token>/`
-
-Marks the account email as verified when the token is valid.
-
-### Resend Verification
-
-`GET /accounts/resend-verification/`
-`POST /accounts/resend-verification/`
-
-Accepts an email address and sends a fresh verification link if the account exists and is not yet verified.
-
-### Password Reset
-
-Password reset uses Django’s standard account routes:
-
-- `/accounts/password_reset/`
-- `/accounts/password_reset/done/`
-- `/accounts/reset/<uidb64>/<token>/`
-- `/accounts/reset/done/`
-
-Real delivery depends on SMTP configuration, typically Brevo in this project.
-
-## Troubleshooting
-
-### Driver Cannot See Open Bookings
-
-Check:
-
-- driver is logged in
-- vehicle exists
-- vehicle is available
-- vehicle type matches booking
-- vehicle capacity is sufficient
-- browser location permission is granted
-
-### Driver Cannot Mark Pickup
-
-The driver must first arrive at pickup and allow live location updates.
-
-### Driver Cannot Mark Delivered
-
-The driver must first arrive at the dropoff point and allow live location updates.
-
-### Farmer Cannot See Live Tracking
-
-Check:
-
-- booking has been accepted
-- pickup has started
-- driver browser location sharing is active
-
-### Verification Email Does Not Arrive
-
-Check:
-
-- SMTP env vars are present
-- `DEFAULT_FROM_EMAIL` is a verified Brevo sender/domain
-- Brevo transactional logs show delivery activity
-- you are opening the app from `localhost` or a real HTTPS origin rather than `0.0.0.0`
-
-## Error Response Examples
-
-### Generic Validation Error
-
-```json
-{
-  "non_field_errors": [
-    "Request failed."
-  ]
-}
-```
-
-### Driver Tries Pickup Too Early
-
-```json
-{
-  "non_field_errors": [
-    "Arrive at the pickup location before marking this booking as picked up."
-  ]
-}
-```
-
-### Driver Tries Delivery Too Early
-
-```json
-{
-  "non_field_errors": [
-    "Arrive at the delivery location before marking this booking as delivered."
-  ]
-}
-```
-
-### Vehicle Capacity Mismatch
-
-```json
-{
-  "non_field_errors": [
-    "Vehicle capacity is too small for this booking."
-  ]
-}
-```
-
-### Missing Vehicle On Accept
-
-```json
-{
-  "vehicle_id": [
-    "This field is required when accepting a booking."
-  ]
-}
-```
-
-## Error Matrix
-
-| Endpoint | Condition | Status |
-|---|---|---:|
-| `POST /api/bookings/` | Invalid place or payload | `400` |
-| `DELETE /api/bookings/<id>/` | Booking not pending | `400` |
-| `DELETE /api/bookings/<id>/` | Not owner | `404` |
-| `POST /api/bookings/driver/decision/` | Booking not found | `400` |
-| `POST /api/bookings/driver/decision/` | Vehicle missing/unavailable | `400` |
-| `POST /api/bookings/<id>/status/` | Not at pickup/dropoff yet | `400` |
-| `POST /api/bookings/<id>/status/` | Invalid status transition | `400` |
-| `POST /api/bookings/<id>/tracking-updates/` | Not assigned driver | `404` |
-| Any protected route | Not logged in | `401/403` |
-
-## Integration Sequence
-
-### Farmer Booking To Delivery
-
-1. `POST /api/bookings/`
-2. Driver sees booking with `GET /api/bookings/driver/open/`
-3. Driver accepts with `POST /api/bookings/driver/decision/`
-4. Driver arrives and posts `picked_up`
-5. Driver sends tracking updates
-6. System changes booking to `in_transit` after departure from pickup
-7. Driver arrives and posts `delivered`
-8. Farmer polls `GET /api/bookings/` and `GET /api/bookings/<id>/tracking/`
-
-## Curl Examples
-
-These examples assume:
-
-- app is running locally at `http://127.0.0.1:8000`
-- you already have a valid Django session cookie
-- `csrftoken` and `sessionid` are available
-
-Example cookie usage:
-
-```bash
-export BASE_URL=http://127.0.0.1:8000
-export CSRF_TOKEN=your-csrf-token
-export SESSION_ID=your-session-id
-```
-
-### Create Booking
-
-```bash
-curl -X POST "$BASE_URL/api/bookings/" \
-  -H "Content-Type: application/json" \
-  -H "X-CSRFToken: $CSRF_TOKEN" \
-  -H "Cookie: csrftoken=$CSRF_TOKEN; sessionid=$SESSION_ID" \
-  -d '{
-    "produce_name": "Tomatoes",
-    "produce_description": "Fresh tomatoes for market",
-    "weight_kg": "800.00",
-    "pickup_place": {
-      "place_id": "11",
-      "source": "nominatim",
-      "osm_type": "W",
-      "osm_id": "11",
-      "name": "Farm Gate",
-      "address": "Farm Gate, Kiambu",
-      "latitude": "-1.292100",
-      "longitude": "36.821900"
-    },
-    "dropoff_place": {
-      "place_id": "22",
-      "source": "nominatim",
-      "osm_type": "W",
-      "osm_id": "22",
-      "name": "City Market",
-      "address": "City Market, Nairobi",
-      "latitude": "-1.300000",
-      "longitude": "36.800000"
-    }
-  }'
-```
-
-### List Farmer Bookings
-
-```bash
-curl "$BASE_URL/api/bookings/" \
-  -H "Cookie: csrftoken=$CSRF_TOKEN; sessionid=$SESSION_ID"
-```
-
-### Accept Booking As Driver
-
-```bash
-curl -X POST "$BASE_URL/api/bookings/driver/decision/" \
-  -H "Content-Type: application/json" \
-  -H "X-CSRFToken: $CSRF_TOKEN" \
-  -H "Cookie: csrftoken=$CSRF_TOKEN; sessionid=$SESSION_ID" \
-  -d '{
-    "booking_id": 12,
-    "vehicle_id": 4,
-    "action": "accept"
-  }'
-```
-
-### Mark Picked Up
-
-```bash
-curl -X POST "$BASE_URL/api/bookings/12/status/" \
-  -H "Content-Type: application/json" \
-  -H "X-CSRFToken: $CSRF_TOKEN" \
-  -H "Cookie: csrftoken=$CSRF_TOKEN; sessionid=$SESSION_ID" \
-  -d '{
-    "status": "picked_up"
-  }'
-```
-
-### Send Tracking Update
-
-```bash
-curl -X POST "$BASE_URL/api/bookings/12/tracking-updates/" \
-  -H "Content-Type: application/json" \
-  -H "X-CSRFToken: $CSRF_TOKEN" \
-  -H "Cookie: csrftoken=$CSRF_TOKEN; sessionid=$SESSION_ID" \
-  -d '{
-    "latitude": "-1.295500",
-    "longitude": "36.815000",
-    "speed_kph": "45.00",
-    "notes": "Automatic live location update"
-  }'
-```
-
-### Mark Delivered
-
-```bash
-curl -X POST "$BASE_URL/api/bookings/12/status/" \
-  -H "Content-Type: application/json" \
-  -H "X-CSRFToken: $CSRF_TOKEN" \
-  -H "Cookie: csrftoken=$CSRF_TOKEN; sessionid=$SESSION_ID" \
-  -d '{
-    "status": "delivered"
-  }'
-```
-
-### Update Driver Location
-
-```bash
-curl -X PATCH "$BASE_URL/api/transporters/me/location/" \
-  -H "Content-Type: application/json" \
-  -H "X-CSRFToken: $CSRF_TOKEN" \
-  -H "Cookie: csrftoken=$CSRF_TOKEN; sessionid=$SESSION_ID" \
-  -d '{
-    "current_latitude": "-1.292100",
-    "current_longitude": "36.821900"
-  }'
-```
-
-### Search Map Places
-
-```bash
-curl "$BASE_URL/api/maps/places/search/?q=City%20Market" \
-  -H "Cookie: csrftoken=$CSRF_TOKEN; sessionid=$SESSION_ID"
-```
-
-## Frontend Integration Notes
-
-### Authentication
-
-- Browser-based frontend should rely on session authentication.
-- Send requests with credentials included.
-- Include CSRF token for `POST`, `PATCH`, and `DELETE`.
-
-### Recommended UI Polling
-
-- Farmer booking list: every `10s`
-- Farmer active tracking view: every `10s`
-- Driver open/assigned bookings: every `10-15s`
-- Driver live location updates: continuous browser geolocation watch
-
-### Key UI Behaviors
-
-- After farmer booking creation, clear all form and map-selection state.
-- Show human-friendly messages instead of raw API validation JSON.
-- Hide raw technical tracking/status history from farmers and drivers.
-- Show farmer live tracking only after pickup starts.
-- For driver pickup/delivery failures, use a modal/popup rather than inline JSON output.
-
-### Important Frontend Rules
-
-- Do not expose transport pricing controls to drivers.
-- Do not allow farmers to edit bookings.
-- Do not let drivers manually set `in_transit`.
-- Do not show driver location to farmers before pickup starts.
-
-## Suggested Future API Improvements
-
-- Token-based API auth for mobile clients
-- WebSocket or Server-Sent Events for live tracking instead of polling
-- Public API schema export using OpenAPI/Swagger
-- Dedicated admin analytics endpoints
-- Paginated booking lists
-
-## Test Command
-
-```bash
-cd backend
-DJANGO_SECRET_KEY=test-secret-key ../.venv/bin/python manage.py test
+Returns booking-level payment snapshot with nested payment detail.
+
+## Route Summary
+
+```text
+/api/bookings/
+/api/bookings/<id>/
+/api/bookings/<booking_id>/nearby-transporters/
+/api/bookings/<booking_id>/status/
+/api/bookings/<booking_id>/mark-delivered/
+/api/bookings/<booking_id>/tracking/
+/api/bookings/<booking_id>/payment-status/
+/api/bookings/<booking_id>/tracking-updates/
+/api/bookings/driver/open/
+/api/bookings/driver/assigned/
+/api/bookings/driver/decision/
+
+/api/maps/places/search/
+/api/maps/places/lookup/
+/api/maps/places/reverse/
+/api/maps/routes/preview/
+
+/api/payments/stk-push/
+/api/payments/mpesa/callback/
+/api/payments/<id>/
+/api/payments/bookings/<booking_id>/status/
+
+/api/transporters/me/
+/api/transporters/me/location/
 ```

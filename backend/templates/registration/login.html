@@ -1,51 +1,215 @@
 {% extends "base.html" %}
 
 {% block title %}Sign In | FreshHaul{% endblock %}
-{% block page_class %}auth-wide{% endblock %}
+{% block page_class %}wide{% endblock %}
+{% block card_class %}auth-card-reset{% endblock %}
+
+{% block extra_head %}
+<style>
+    .auth-split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0;
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow);
+        min-height: 520px;
+    }
+
+    .auth-brand-panel {
+        background:
+            linear-gradient(140deg, rgba(5, 150, 105, 0.92), rgba(6, 95, 70, 0.96)),
+            url("https://images.pexels.com/photos/10041310/pexels-photo-10041310.jpeg?cs=srgb&dl=pexels-cristian-rojas-10041310.jpg&fm=jpg") center/cover no-repeat;
+        padding: 3rem 2.5rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        color: #fff;
+    }
+
+    .auth-brand-logo {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #fff;
+        text-decoration: none;
+    }
+
+    .auth-brand-logo-icon {
+        width: 36px;
+        height: 36px;
+        background: rgba(255,255,255,0.18);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(8px);
+    }
+
+    .auth-brand-copy h2 {
+        color: #fff;
+        font-size: clamp(1.6rem, 3vw, 2.2rem);
+        margin-bottom: 0.75rem;
+        line-height: 1.2;
+    }
+
+    .auth-brand-copy p {
+        color: rgba(255,255,255,0.82);
+        font-size: 1rem;
+        line-height: 1.6;
+        margin: 0;
+    }
+
+    .auth-brand-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.6rem;
+        margin-top: 2rem;
+    }
+
+    .auth-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.38rem 0.75rem;
+        background: rgba(255,255,255,0.14);
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 999px;
+        font-size: 0.83rem;
+        color: rgba(255,255,255,0.92);
+        font-weight: 500;
+    }
+
+    .auth-form-panel {
+        background: #fff;
+        padding: 3rem 2.5rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+
+    .auth-form-panel h1 {
+        font-size: 1.9rem;
+        margin-bottom: 0.4rem;
+    }
+
+    .auth-form-panel .auth-sub {
+        color: var(--muted);
+        font-size: 0.98rem;
+        margin-bottom: 2rem;
+    }
+
+    .form-field { margin-bottom: 1.1rem; }
+
+    .auth-submit-btn {
+        width: 100%;
+        margin-top: 1.25rem;
+        padding: 0.95rem;
+        font-size: 1.05rem;
+    }
+
+    .auth-links {
+        margin-top: 1.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        text-align: center;
+        font-size: 0.93rem;
+    }
+
+    .auth-links a {
+        color: var(--accent-dark);
+        text-decoration: none;
+        font-weight: 500;
+        transition: color 0.2s;
+    }
+
+    .auth-links a:hover { color: var(--accent); }
+
+    .auth-links .muted-link { color: var(--muted); }
+
+    @media (max-width: 700px) {
+        .auth-split { grid-template-columns: 1fr; }
+        .auth-brand-panel { padding: 2rem 1.5rem; min-height: auto; }
+        .auth-form-panel  { padding: 2rem 1.5rem; }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div style="text-align: center; margin-bottom: 2rem;">
-    <h1>Welcome back</h1>
-    <p>Sign in to manage your bookings, deliveries, and account.</p>
-</div>
+<div class="auth-split">
+    <!-- Left branding panel -->
+    <div class="auth-brand-panel">
+        <a href="{% url 'home' %}" class="auth-brand-logo">
+            <div class="auth-brand-logo-icon">
+                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                </svg>
+            </div>
+            FreshHaul
+        </a>
 
-{% if form.errors %}
-<div class="errornote">
-    {% if form.non_field_errors %}
-        {{ form.non_field_errors|join:" " }}
-    {% else %}
-        We could not sign you in with those details. Please check them and try again.
-    {% endif %}
-</div>
-{% endif %}
+        <div class="auth-brand-copy">
+            <h2>Farm Produce Transport, Simplified.</h2>
+            <p>Book transport from pickup to delivery, pay with M-Pesa, and follow your goods in real time.</p>
+            <div class="auth-brand-badges">
+                <span class="auth-badge">📦 Map Booking</span>
+                <span class="auth-badge">💳 M-Pesa Payment</span>
+                <span class="auth-badge">📍 Live Tracking</span>
+            </div>
+        </div>
 
-{% if next %}
-<p style="text-align: center; color: var(--info);">You will be redirected after signing in.</p>
-{% endif %}
+        <p style="color: rgba(255,255,255,0.5); font-size: 0.82rem; margin: 0;">
+            &copy; FreshHaul Produce Transport
+        </p>
+    </div>
 
-<form method="post">
-    {% csrf_token %}
-    
-    {% for field in form %}
-    <p>
-        {{ field.label_tag }}
-        {{ field }}
-        {% if field.help_text %}
-        <span class="helptext">{{ field.help_text }}</span>
+    <!-- Right form panel -->
+    <div class="auth-form-panel">
+        <h1>Welcome back</h1>
+        <p class="auth-sub">Sign in to manage your bookings, deliveries, and account.</p>
+
+        {% if form.errors %}
+        <div class="errornote">
+            {% if form.non_field_errors %}
+                {{ form.non_field_errors|join:" " }}
+            {% else %}
+                We could not sign you in with those details. Please check them and try again.
+            {% endif %}
+        </div>
         {% endif %}
-        {% for error in field.errors %}
-        <span class="errorlist" style="display: block; margin-top: 0.5rem;">{{ error }}</span>
-        {% endfor %}
-    </p>
-    {% endfor %}
-    
-    <button type="submit" style="width: 100%; margin-top: 1rem;">Sign In</button>
-    <input type="hidden" name="next" value="{{ next }}">
-</form>
 
-<div class="links">
-    <a href="{% url 'signup' %}">Don't have an account? Sign up</a>
-    <a href="{% url 'resend-verification' %}" style="color: var(--muted); font-size: 0.95rem;">Resend verification code</a>
-    <a href="{% url 'password_reset' %}" style="color: var(--muted); font-size: 0.95rem;">Forgot your password?</a>
+        {% if next %}
+        <p style="text-align: center; color: var(--info); font-size: 0.95rem; margin-bottom: 1rem;">
+            You will be redirected after signing in.
+        </p>
+        {% endif %}
+
+        <form method="post">
+            {% csrf_token %}
+            {% for field in form %}
+            <div class="form-field">
+                {{ field.label_tag }}
+                {{ field }}
+                {% if field.help_text %}
+                <span class="helptext">{{ field.help_text }}</span>
+                {% endif %}
+                {% for error in field.errors %}
+                <span class="errorlist" style="display: block; margin-top: 0.4rem;">{{ error }}</span>
+                {% endfor %}
+            </div>
+            {% endfor %}
+            <button type="submit" class="btn auth-submit-btn">Sign In</button>
+            <input type="hidden" name="next" value="{{ next }}">
+        </form>
+
+        <div class="auth-links">
+            <a href="{% url 'signup' %}">Don't have an account? <strong>Sign up</strong></a>
+            <a href="{% url 'resend-verification' %}" class="muted-link">Resend verification code</a>
+            <a href="{% url 'password_reset' %}" class="muted-link">Forgot your password?</a>
+        </div>
+    </div>
 </div>
 {% endblock %}

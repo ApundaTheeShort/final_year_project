@@ -1,36 +1,218 @@
 {% extends "base.html" %}
 
 {% block title %}Create Account | FreshHaul{% endblock %}
-{% block page_class %}auth-wide{% endblock %}
+{% block page_class %}wide{% endblock %}
+{% block card_class %}auth-card-reset{% endblock %}
+
+{% block extra_head %}
+<style>
+    .auth-split {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0;
+        border-radius: var(--radius-lg);
+        overflow: hidden;
+        box-shadow: var(--shadow);
+        min-height: 560px;
+    }
+
+    .auth-brand-panel {
+        background:
+            linear-gradient(140deg, rgba(5, 150, 105, 0.92), rgba(6, 95, 70, 0.96)),
+            url("https://images.pexels.com/photos/6216299/pexels-photo-6216299.jpeg?cs=srgb&dl=pexels-eva-bronzini-6216299.jpg&fm=jpg") center/cover no-repeat;
+        padding: 3rem 2.5rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        color: #fff;
+    }
+
+    .auth-brand-logo {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        font-size: 1.4rem;
+        font-weight: 700;
+        color: #fff;
+        text-decoration: none;
+    }
+
+    .auth-brand-logo-icon {
+        width: 36px;
+        height: 36px;
+        background: rgba(255,255,255,0.18);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        backdrop-filter: blur(8px);
+    }
+
+    .auth-brand-copy h2 {
+        color: #fff;
+        font-size: clamp(1.6rem, 3vw, 2.2rem);
+        margin-bottom: 0.75rem;
+        line-height: 1.2;
+    }
+
+    .auth-brand-copy p {
+        color: rgba(255,255,255,0.82);
+        font-size: 1rem;
+        line-height: 1.6;
+        margin: 0;
+    }
+
+    .role-cards {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+        margin-top: 1.75rem;
+    }
+
+    .role-card {
+        background: rgba(255,255,255,0.12);
+        border: 1px solid rgba(255,255,255,0.2);
+        border-radius: 0.85rem;
+        padding: 1rem;
+    }
+
+    .role-card-icon { font-size: 1.5rem; margin-bottom: 0.4rem; }
+
+    .role-card h4 {
+        color: #fff;
+        margin: 0 0 0.3rem;
+        font-size: 0.95rem;
+    }
+
+    .role-card p {
+        color: rgba(255,255,255,0.75);
+        font-size: 0.82rem;
+        margin: 0;
+    }
+
+    .auth-form-panel {
+        background: #fff;
+        padding: 2.5rem 2.5rem;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        overflow-y: auto;
+    }
+
+    .auth-form-panel h1 {
+        font-size: 1.75rem;
+        margin-bottom: 0.3rem;
+    }
+
+    .auth-form-panel .auth-sub {
+        color: var(--muted);
+        font-size: 0.95rem;
+        margin-bottom: 1.5rem;
+    }
+
+    .form-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.85rem 1rem;
+    }
+
+    .form-field { margin-bottom: 0; }
+
+    .form-field label { margin-bottom: 0.35rem; font-size: 0.9rem; }
+
+    .auth-submit-btn {
+        width: 100%;
+        margin-top: 1.25rem;
+        padding: 0.95rem;
+        font-size: 1.05rem;
+    }
+
+    .auth-links {
+        margin-top: 1.25rem;
+        text-align: center;
+        font-size: 0.93rem;
+    }
+
+    .auth-links a {
+        color: var(--accent-dark);
+        text-decoration: none;
+        font-weight: 500;
+    }
+
+    .auth-links a:hover { color: var(--accent); }
+
+    @media (max-width: 700px) {
+        .auth-split        { grid-template-columns: 1fr; }
+        .auth-brand-panel  { padding: 2rem 1.5rem; min-height: auto; }
+        .auth-form-panel   { padding: 2rem 1.5rem; }
+        .form-grid         { grid-template-columns: 1fr; }
+        .role-cards        { grid-template-columns: 1fr; }
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div style="text-align: center; margin-bottom: 2rem;">
-    <h1>Join FreshHaul</h1>
-    <p>Create an account as a farmer to book transport, or as a transporter to receive delivery jobs.</p>
-</div>
+<div class="auth-split">
+    <!-- Left branding panel -->
+    <div class="auth-brand-panel">
+        <a href="{% url 'home' %}" class="auth-brand-logo">
+            <div class="auth-brand-logo-icon">
+                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                </svg>
+            </div>
+            FreshHaul
+        </a>
 
-<form method="post">
-    {% csrf_token %}
-    
-    <div class="grid grid-2" style="gap: 1rem;">
-        {% for field in form %}
-            <div style="{% if forloop.last or field.name == 'phone_number' or field.name == 'email' %}grid-column: 1 / -1;{% endif %}">
-                {{ field.label_tag }}
-                {{ field }}
-                {% if field.help_text %}
-                <span class="helptext">{{ field.help_text }}</span>
-                {% endif %}
-                {% for error in field.errors %}
-                <span class="errorlist" style="display: block; margin-top: 0.5rem;">{{ error }}</span>
+        <div class="auth-brand-copy">
+            <h2>Join the FreshHaul Platform</h2>
+            <p>Connect farmers and transporters to move produce efficiently, from map-based booking to M-Pesa payment and live tracking.</p>
+            <div class="role-cards">
+                <div class="role-card">
+                    <div class="role-card-icon">🌾</div>
+                    <h4>Farmer</h4>
+                    <p>Book transport, pay, and track your produce delivery.</p>
+                </div>
+                <div class="role-card">
+                    <div class="role-card-icon">🚛</div>
+                    <h4>Transporter</h4>
+                    <p>Discover jobs, accept bookings, and complete trips.</p>
+                </div>
+            </div>
+        </div>
+
+        <p style="color: rgba(255,255,255,0.5); font-size: 0.82rem; margin: 0;">
+            &copy; FreshHaul Produce Transport
+        </p>
+    </div>
+
+    <!-- Right form panel -->
+    <div class="auth-form-panel">
+        <h1>Create Account</h1>
+        <p class="auth-sub">Register as a farmer to book transport, or as a transporter to receive delivery jobs.</p>
+
+        <form method="post">
+            {% csrf_token %}
+            <div class="form-grid">
+                {% for field in form %}
+                <div class="form-field" style="{% if forloop.last or field.name == 'phone_number' or field.name == 'email' or field.name == 'password1' or field.name == 'password2' %}grid-column: 1 / -1;{% endif %}">
+                    {{ field.label_tag }}
+                    {{ field }}
+                    {% if field.help_text %}
+                    <span class="helptext">{{ field.help_text }}</span>
+                    {% endif %}
+                    {% for error in field.errors %}
+                    <span class="errorlist" style="display: block; margin-top: 0.35rem;">{{ error }}</span>
+                    {% endfor %}
+                </div>
                 {% endfor %}
             </div>
-        {% endfor %}
-    </div>
-    
-    <button type="submit" style="width: 100%; margin-top: 2rem;">Create Account</button>
-</form>
+            <button type="submit" class="btn auth-submit-btn">Create Account</button>
+        </form>
 
-<div class="links">
-    <a href="{% url 'login' %}">Already have an account? Sign in</a>
+        <div class="auth-links">
+            <a href="{% url 'login' %}">Already have an account? <strong>Sign in</strong></a>
+        </div>
+    </div>
 </div>
 {% endblock %}
